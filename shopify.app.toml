@@ -24,7 +24,11 @@ api_version = "2026-07"
 scopes = "read_orders,read_customers,read_products,read_analytics,read_inventory,read_locations,read_draft_orders,write_products,write_metaobjects,write_metaobject_definitions"
 
 [auth]
-redirect_urls = [ "https://naruto-analytics.vercel.app/api/auth/callback" ]
+redirect_urls = [
+  "https://naruto-analytics.vercel.app/auth",
+  "https://naruto-analytics.vercel.app/auth/callback",
+  "https://naruto-analytics.vercel.app/api/auth/callback",
+]
 
 [product.metafields.app.demo_info]
 type = "single_line_text_field"
