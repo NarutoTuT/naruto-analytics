@@ -1,3 +1,4 @@
+import { vercelPreset } from "@vercel/react-router/vite";
 import { reactRouter } from "@react-router/dev/vite";
 import { defineConfig, type UserConfig } from "vite";
 import tsconfigPaths from "vite-tsconfig-paths";
@@ -35,7 +36,7 @@ export default defineConfig({
     hmr: hmrConfig,
     fs: { allow: ["app", "node_modules"] },
   },
-  plugins: [ reactRouter(), tsconfigPaths() ],
+  plugins: [ reactRouter({ presets: [vercelPreset()] }), tsconfigPaths() ],
   build: { assetsInlineLimit: 0 },
   optimizeDeps: { include: ["@shopify/app-bridge-react"] },
 }) satisfies UserConfig;
