@@ -1,7 +1,6 @@
 import prisma from "../db.server";
 
-const ORDERS_QUERY = `#graphql
-  query GetOrders {
+const ORDERS_QUERY = `query GetOrders {
     orders(first: 100, sortKey: CREATED_AT, reverse: true) {
       totalCount
       edges {
@@ -21,8 +20,7 @@ const ORDERS_QUERY = `#graphql
     }
   }`;
 
-const PRODUCTS_QUERY = `#graphql
-  query GetProducts {
+const PRODUCTS_QUERY = `query GetProducts {
     products(first: 100) {
       totalCount
       edges {
@@ -36,8 +34,7 @@ const PRODUCTS_QUERY = `#graphql
     }
   }`;
 
-const CUSTOMERS_QUERY = `#graphql
-  query GetCustomers {
+const CUSTOMERS_QUERY = `query GetCustomers {
     customers(first: 250) {
       totalCount
       edges {
@@ -215,4 +212,6 @@ export async function getSnapshotHistory(shopId: string) {
   });
   return snapshots.map(s => ({ date: s.snapshotDate.toISOString().slice(0, 10), gmv: s.totalGMV, orders: s.totalOrders, aov: s.aov }));
 }
+
+
 
