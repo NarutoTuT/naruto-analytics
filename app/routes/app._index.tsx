@@ -1,5 +1,5 @@
 import type { LoaderFunctionArgs } from "react-router";
-import { useLoaderData, useFetcher, json } from "react-router";
+import { useLoaderData, useFetcher, data } from "react-router";
 import { useEffect, useState, useMemo } from "react";
 import { authenticate } from "../shopify.server";
 import { fetchAndComputeAnalytics, getSnapshotHistory } from "../lib/analytics.server";
@@ -15,9 +15,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     const s = j.data.shop;
     shopRecord = await prisma.shop.create({ data: { id: s.id, myshopifyDomain: s.myshopifyDomain, name: s.name, email: s.email, createdAt: new Date(s.createdAt) } });
   }
-  const data = await fetchAndComputeAnalytics(admin);
-  data.snapshotHistory = await getSnapshotHistory(shopRecord.id);
-  return json(data);
+  const analyticsData = await fetchAndComputeAnalytics(admin);
+  analyticsData.snapshotHistory = await getSnapshotHistory(shopRecord.id);
+  return data(analyticsData);
 };
 
 export default function Dashboard() {
@@ -121,11 +121,11 @@ export default function Dashboard() {
         </s-unordered-list>
       </s-box>
 
-      {data.snapshotHistory.length>0 && (
+      {analyticsData.snapshotHistory.length>0 && (
         <s-box padding="base" borderWidth="base" borderRadius="base" marginBlockStart="base">
           <s-text variant="headingMd" fontWeight="bold">Snapshot History</s-text>
           <s-table><s-thead><s-tr><s-th>Date</s-th><s-th>GMV</s-th><s-th>Orders</s-th><s-th>AOV</s-th></s-tr></s-thead>
-            <s-tbody>{data.snapshotHistory.slice(0,10).map((s,i) => (
+            <s-tbody>{analyticsData.snapshotHistory.slice(0,10).map((s,i) => (
               <s-tr key={i}><s-td>{s.date}</s-td><s-td>${s.gmv.toLocaleString()}</s-td><s-td>{s.orders}</s-td><s-td>${s.aov.toFixed(0)}</s-td></s-tr>
             ))}</s-tbody>
           </s-table>
