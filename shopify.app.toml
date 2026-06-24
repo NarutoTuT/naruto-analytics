@@ -2,7 +2,7 @@
 
 client_id = "bbafbe278b711130cffb7523f6bda845"
 name = "Naruto-Analytics"
-application_url = "https://example.com"
+application_url = "https://naruto-analytics.vercel.app"
 embedded = true
 
 [build]
@@ -25,7 +25,7 @@ api_version = "2026-07"
 scopes = "read_orders,read_customers,read_products,read_analytics,read_inventory,read_locations,read_draft_orders,write_products,write_metaobjects,write_metaobject_definitions"
 
 [auth]
-redirect_urls = [ "https://example.com/api/auth" ]
+redirect_urls = [ "https://naruto-analytics.vercel.app/api/auth/callback" ]
 
 [product.metafields.app.demo_info]
 type = "single_line_text_field"
