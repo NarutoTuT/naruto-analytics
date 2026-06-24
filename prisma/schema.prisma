@@ -1,0 +1,121 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// Note that some adapters may set a maximum length for the String type by default, please ensure your strings are long
+// enough when changing adapters.
+// See https://www.prisma.io/docs/orm/reference/prisma-schema-reference#string for more information
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Session {
+  id            String    @id
+  shop          String
+  state         String
+  isOnline      Boolean   @default(false)
+  scope         String?
+  expires       DateTime?
+  accessToken   String
+  userId        BigInt?
+  firstName     String?
+  lastName      String?
+  email         String?
+  accountOwner  Boolean   @default(false)
+  locale        String?
+  collaborator  Boolean?  @default(false)
+  emailVerified Boolean?  @default(false)
+  refreshToken        String?
+  refreshTokenExpires DateTime?
+}
+model Shop {
+  id              String   @id
+  myshopifyDomain String   @unique
+  name            String?
+  email           String?
+  createdAt       DateTime
+  currencyCode    String   @default("USD")
+  timezone        String?
+  analyticsSnapshots  AnalyticsSnapshot[]
+  orderSnapshots      OrderSnapshot[]
+  productSnapshots    ProductSnapshot[]
+}
+
+model AnalyticsSnapshot {
+  id           Int      @id @default(autoincrement())
+  shopId       String
+  shop         Shop     @relation(fields: [shopId], references: [id])
+  snapshotDate DateTime @default(now())
+  totalGMV    Float    @default(0)
+  totalOrders Int      @default(0)
+  aov         Float    @default(0)
+  totalCustomers Int   @default(0)
+  newCustomers Int     @default(0)
+  repeatCustomers Int  @default(0)
+  refundedOrders Int   @default(0)
+  refundAmount Float   @default(0)
+  topSkuJson   String  @default("[]")
+  categoryJson String  @default("[]")
+  dailyOrdersJson String @default("[]")
+  rawData     String?
+
+  @@index([shopId, snapshotDate])
+}
+
+model OrderSnapshot {
+  id             Int      @id @default(autoincrement())
+  shopId         String
+  shop           Shop     @relation(fields: [shopId], references: [id])
+  shopifyOrderId String  @unique
+  orderName      String
+  createdAt      DateTime
+  financialStatus String?
+  fulfillmentStatus String?
+  totalPrice     Float
+  subtotalPrice  Float
+  totalTax       Float
+  totalShipping  Float
+  currency       String   @default("USD")
+  customerId     String?
+  customerEmail  String?
+  customerName   String?
+  lineItemsJson  String   @default("[]")
+  snapshotDate   DateTime @default(now())
+
+  @@index([shopId, createdAt])
+}
+
+model ProductSnapshot {
+  id             Int      @id @default(autoincrement())
+  shopId         String
+  shop           Shop     @relation(fields: [shopId], references: [id])
+  shopifyProductId String @unique
+  title          String
+  handle         String
+  productType    String?
+  status         String?
+  totalInventory Int      @default(0)
+  variantsJson   String   @default("[]")
+  snapshotDate   DateTime @default(now())
+
+  @@index([shopId, snapshotDate])
+}
+
+model AnalyticsReport {
+  id             Int      @id @default(autoincrement())
+  shopId         String
+  reportType     String   // "daily", "weekly", "monthly"
+  periodStart    DateTime
+  periodEnd      DateTime
+  title          String
+  summary        String
+  dataJson       String   @default("{}")
+  insightsJson   String   @default("[]")
+  createdAt      DateTime @default(now())
+
+  @@index([shopId, reportType, periodStart])
+}
