@@ -152,12 +152,12 @@ export async function fetchAndComputeAnalytics(admin: { graphql: Function }): Pr
   // Issues
   const issues: { type: "problem" | "insight"; title: string; detail: string }[] = [];
   const convRate = customers.length > 0 ? Math.round(purchasedCustomers.length / customers.length * 100) : 0;
-  const repRate = customers.length > 0 ? Math.round(repeatBuyers.length / customers.length * 1000) / 10 : 0;
-  if (convRate < 25) issues.push({ type: "problem", title: "低转化率", detail: `�?${convRate}% 注册用户产生购买 (${purchasedCustomers.length}/${customers.length})` });
-  if (repRate < 5) issues.push({ type: "problem", title: "低复购率", detail: `复购�?${repRate}%，缺乏续购机制` });
+  if (repRate < 5) issues.push({ type: "problem", title: "Low repurchase rate", detail: `Repurchase rate ${repRate}% - lacks retention` });
+  if (convRate < 25) issues.push({ type: "problem", title: "Low conversion rate", detail: `Only ${convRate}% registered users purchased (${purchasedCustomers.length}/${customers.length})` });
+  if (repRate < 5) issues.push({ type: "problem", title: "Low repurchase rate", detail: `Repurchase rate ${repRate}% - lacks retention` });
   const top3Pct = paidOrders.length > 0 ? Math.round(topSkuRevenue.slice(0, 3).reduce((s, sku) => s + sku.revenue, 0) / totalGMV * 100) : 0;
-  if (top3Pct > 50) issues.push({ type: "problem", title: "收入集中", detail: `Top3 SKU�?${top3Pct}% 收入` });
-  if (AOV > 300) issues.push({ type: "insight", title: "高AOV优势", detail: `AOV $${AOV.toFixed(0)}，适合Upsell策略` });
+  if (top3Pct > 50) issues.push({ type: "problem", title: "Revenue concentration", detail: `Top3 SKU = ${top3Pct}% of revenue` });
+  if (AOV > 300) issues.push({ type: "insight", title: "High AOV advantage", detail: `AOV $${AOV.toFixed(0)} - good for upsell` });
 
   return {
     gmv: Math.round(totalGMV * 100) / 100, totalOrders: paidOrders.length,
@@ -167,11 +167,11 @@ export async function fetchAndComputeAnalytics(admin: { graphql: Function }): Pr
     topSkuRevenue, categoryRevenue, dailyGmv, orderValueBuckets, recentOrders,
     snapshotHistory: [],
     issues, recommendations: [
-      "对未购买注册用户触发72h免运�?折扣邮件",
-      "每单包裹内植入配件目录卡提升配件销�?,
-      "向低客单高转化产品（手表/耳机）倾斜广告预算",
-      "接入分期支付降低高价决策门槛",
-      "购买配件用户7天后触发旗舰机型推荐",
+      "Target non-purchasing registrants with 72h free shipping",
+      "Trigger abandoned cart emails within 72h",
+      "Direct ad budget to low-AOV high-conversion products (watches/earphones)",
+      "Enable installment payments to reduce high-price decision barriers",
+      "Flag-ship product recommendation 7 days after accessory purchase",
     ],
   };
 }
