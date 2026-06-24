@@ -1,5 +1,5 @@
 import type { LoaderFunctionArgs, ActionFunctionArgs } from "react-router";
-import { json } from "react-router";
+import { data } from "react-router";
 import { authenticate } from "../shopify.server";
 import { fetchAndComputeAnalytics, saveSnapshot, getSnapshotHistory } from "../lib/analytics.server";
 import prisma from "../db.server";
@@ -18,11 +18,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     });
   }
 
-  const data = await fetchAndComputeAnalytics(admin);
+  const analyticsData = await fetchAndComputeAnalytics(admin);
   const history = await getSnapshotHistory(shopRecord.id);
-  data.snapshotHistory = history;
+  analyticsData.snapshotHistory = history;
 
-  return json(data);
+  return data(analyticsData);
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
@@ -42,9 +42,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   }
 
   if (actionType === "sync") {
-    const data = await saveSnapshot(admin, shopRecord.id);
-    return json({ success: true, message: "Data synced successfully", data });
+    const syncResult = await saveSnapshot(admin, shopRecord.id);
+    return data({ success: true, message: "Data synced successfully", syncResult });
   }
 
-  return json({ success: false, message: "Unknown action" }, { status: 400 });
+  return data({ success: false, message: "Unknown action" }, { status: 400 });
 };

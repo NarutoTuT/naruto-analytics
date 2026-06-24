@@ -38,5 +38,6 @@ export default defineConfig({
   },
   plugins: [ reactRouter({ presets: [vercelPreset()] }), tsconfigPaths() ],
   build: { assetsInlineLimit: 0 },
+
   optimizeDeps: { include: ["@shopify/app-bridge-react"] },
 }) satisfies UserConfig;
