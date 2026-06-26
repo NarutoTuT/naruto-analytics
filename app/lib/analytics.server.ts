@@ -148,11 +148,11 @@ export async function fetchAndComputeAnalytics(admin: { graphql: Function }): Pr
 
   // Issues
   const issues: { type: "problem" | "insight"; title: string; detail: string }[] = [];
-  const convRate = customers.length > 0 ? Math.round(purchasedCustomers.length / customers.length * 100) : 0;
-  if (repRate < 5) issues.push({ type: "problem", title: "Low repurchase rate", detail: `Repurchase rate ${repRate}% - lacks retention` });
-  if (convRate < 25) issues.push({ type: "problem", title: "Low conversion rate", detail: `Only ${convRate}% registered users purchased (${purchasedCustomers.length}/${customers.length})` });
-  if (repRate < 5) issues.push({ type: "problem", title: "Low repurchase rate", detail: `Repurchase rate ${repRate}% - lacks retention` });
-  const top3Pct = paidOrders.length > 0 ? Math.round(topSkuRevenue.slice(0, 3).reduce((s, sku) => s + sku.revenue, 0) / totalGMV * 100) : 0;
+ const convRate = customers.length > 0 ? Math.round(purchasedCustomers.length / customers.length * 100) : 0;
+  const repRate = customers.length > 0 ? Math.round(repeatBuyers.length / customers.length * 100) : 0;
+ if (repRate < 5) issues.push({ type: "problem", title: "Low repurchase rate", detail: `Repurchase rate ${repRate}% - lacks retention` });
+ if (convRate < 25) issues.push({ type: "problem", title: "Low conversion rate", detail: `Only ${convRate}% registered users purchased (${purchasedCustomers.length}/${customers.length})` });
+ const top3Pct = paidOrders.length > 0 ? Math.round(topSkuRevenue.slice(0, 3).reduce((s, sku) => s + sku.revenue, 0) / totalGMV * 100) : 0;
   if (top3Pct > 50) issues.push({ type: "problem", title: "Revenue concentration", detail: `Top3 SKU = ${top3Pct}% of revenue` });
   if (AOV > 300) issues.push({ type: "insight", title: "High AOV advantage", detail: `AOV $${AOV.toFixed(0)} - good for upsell` });
 
@@ -212,6 +212,4 @@ export async function getSnapshotHistory(shopId: string) {
   });
   return snapshots.map(s => ({ date: s.snapshotDate.toISOString().slice(0, 10), gmv: s.totalGMV, orders: s.totalOrders, aov: s.aov }));
 }
-
-
 
