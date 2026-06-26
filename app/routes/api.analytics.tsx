@@ -10,7 +10,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   let shopRecord = await prisma.shop.findUnique({ where: { myshopifyDomain: shop } });
   if (!shopRecord) {
-    const shopRes = await admin.graphql(`#graphql query { shop { id name email myshopifyDomain createdAt } }`);
+    const shopRes = await admin.graphql(`query { shop { id name email myshopifyDomain createdAt } }`);
     const shopJson = await shopRes.json();
     const s = shopJson.data.shop;
     shopRecord = await prisma.shop.create({
@@ -33,7 +33,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   let shopRecord = await prisma.shop.findUnique({ where: { myshopifyDomain: shop } });
   if (!shopRecord) {
-    const shopRes = await admin.graphql(`#graphql query { shop { id name email myshopifyDomain createdAt } }`);
+    const shopRes = await admin.graphql(`query { shop { id name email myshopifyDomain createdAt } }`);
     const shopJson = await shopRes.json();
     const s = shopJson.data.shop;
     shopRecord = await prisma.shop.create({

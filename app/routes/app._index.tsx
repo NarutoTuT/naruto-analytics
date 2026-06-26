@@ -10,7 +10,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
   let shopRecord = await prisma.shop.findUnique({ where: { myshopifyDomain: session.shop } });
   if (!shopRecord) {
-    const r = await admin.graphql(`#graphql query { shop { id name email myshopifyDomain createdAt } }`);
+    const r = await admin.graphql(`query { shop { id name email myshopifyDomain createdAt } }`);
     const j = await r.json();
     const s = j.data.shop;
     shopRecord = await prisma.shop.create({ data: { id: s.id, myshopifyDomain: s.myshopifyDomain, name: s.name, email: s.email, createdAt: new Date(s.createdAt) } });
