@@ -22,14 +22,18 @@ if (host === "localhost") {
   hmrConfig = { protocol: "ws", host: "localhost", port: 64999, clientPort: 64999 };
 } else {
   hmrConfig = { protocol: "wss", host: host, port: parseInt(process.env.FRONTEND_PORT!) || 8002, clientPort: 443 };
-}
+  }
+
+  const devHttps = host === "localhost" && nodeFs.existsSync(nodePath.join(__dirname, ".shopify", "localhost.key"))
+    ? {
+        key: nodeFs.readFileSync(nodePath.join(__dirname, ".shopify", "localhost.key")),
+        cert: nodeFs.readFileSync(nodePath.join(__dirname, ".shopify", "localhost.crt")),
+      }
+    : false;
 
 export default defineConfig({
   server: {
-    https: {
-      key: nodeFs.readFileSync(nodePath.join(__dirname, ".shopify", "localhost.key")),
-      cert: nodeFs.readFileSync(nodePath.join(__dirname, ".shopify", "localhost.crt")),
-    },
+    https: devHttps,
     allowedHosts: [host],
     cors: { preflightContinue: true },
     port: Number(process.env.PORT || 3000),
@@ -38,7 +42,6 @@ export default defineConfig({
   },
   plugins: [ reactRouter({ presets: [vercelPreset()] }), tsconfigPaths() ],
   build: { assetsInlineLimit: 0 },
-
 
   optimizeDeps: { include: ["@shopify/app-bridge-react"] },
 }) satisfies UserConfig;
