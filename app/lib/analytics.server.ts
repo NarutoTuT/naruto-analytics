@@ -2,7 +2,6 @@ import prisma from "../db.server";
 
 const ORDERS_QUERY = `query GetOrders {
     orders(first: 100, sortKey: CREATED_AT, reverse: true) {
-      totalCount
       edges {
         node {
           id name createdAt displayFinancialStatus displayFulfillmentStatus
@@ -22,7 +21,6 @@ const ORDERS_QUERY = `query GetOrders {
 
 const PRODUCTS_QUERY = `query GetProducts {
     products(first: 100) {
-      totalCount
       edges {
         node {
           id title handle productType status totalInventory
@@ -36,7 +34,6 @@ const PRODUCTS_QUERY = `query GetProducts {
 
 const CUSTOMERS_QUERY = `query GetCustomers {
     customers(first: 250) {
-      totalCount
       edges {
         node { id email displayName createdAt numberOfOrders amountSpent { amount } }
       }

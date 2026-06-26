@@ -1,5 +1,5 @@
 import type { LoaderFunctionArgs } from "react-router";
-import { useLoaderData, useFetcher, data } from "react-router";
+import { useLoaderData, useFetcher, data, type MetaArgs } from "react-router";
 import { useEffect, useState, useMemo } from "react";
 import { authenticate } from "../shopify.server";
 import { fetchAndComputeAnalytics, getSnapshotHistory } from "../lib/analytics.server";
@@ -7,6 +7,7 @@ import prisma from "../db.server";
 import type { AnalyticsData } from "../lib/analytics.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
+  try {
   const { admin, session } = await authenticate.admin(request);
   let shopRecord = await prisma.shop.findUnique({ where: { myshopifyDomain: session.shop } });
   if (!shopRecord) {
@@ -18,10 +19,22 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const analyticsData = await fetchAndComputeAnalytics(admin);
   analyticsData.snapshotHistory = await getSnapshotHistory(shopRecord.id);
   return data(analyticsData);
+  } catch (err) {
+    console.error("Loader error:", err);
+    return data({ error: err instanceof Error ? err.message : "Unknown error" }, { status: 500 });
+  }
 };
 
 export default function Dashboard() {
-  const data = useLoaderData<AnalyticsData>();
+  // @ts-expect-error - handle error case
+  const errData = useLoaderData() as AnalyticsData & { error?: string };
+  if (errData.error) {
+    return <div style={{ padding: 24, fontFamily: "system-ui" }}>
+      <h2 style={{ color: "#d83" }}>Error loading dashboard</h2>
+      <p>{errData.error}</p>
+    </div>;
+  }
+  const data = errData;
   const fetcher = useFetcher();
   const [syncing, setSyncing] = useState(false);
 
