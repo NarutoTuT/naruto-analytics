@@ -19,19 +19,6 @@ const ORDERS_QUERY = `query GetOrders {
     }
   }`;
 
-const PRODUCTS_QUERY = `query GetProducts {
-    products(first: 100) {
-      edges {
-        node {
-          id title handle productType status totalInventory
-          variants(first: 20) {
-            edges { node { id sku title price compareAtPrice inventoryQuantity } }
-          }
-        }
-      }
-    }
-  }`;
-
 const CUSTOMERS_QUERY = `query GetCustomers {
     customers(first: 250) {
       edges {
@@ -50,6 +37,20 @@ function classifySku(sku: string): string {
   return "Accessories & Other";
 }
 
+export interface TrendData {
+  change: number;
+  direction: "up" | "down" | "flat";
+}
+
+export interface PrioritizedIssue {
+  type: "problem" | "insight";
+  title: string;
+  detail: string;
+  action: string;
+  priority: "high" | "medium" | "low";
+  revenueImpact: number;
+}
+
 export interface AnalyticsData {
   gmv: number; totalOrders: number; aov: number; totalCustomers: number;
   newCustomers: number; repeatCustomers: number; refundedOrders: number; refundAmount: number;
@@ -61,6 +62,55 @@ export interface AnalyticsData {
   snapshotHistory: { date: string; gmv: number; orders: number; aov: number }[];
   issues: { type: "problem" | "insight"; title: string; detail: string }[];
   recommendations: string[];
+  trends: { gmv: TrendData; orders: TrendData; aov: TrendData; };
+  prioritizedIssues: PrioritizedIssue[];
+}
+
+function computeTrend(current: number, dailyData: { gmv: number; orders: number }[]): TrendData {
+  if (dailyData.length < 2) return { change: 0, direction: "flat" };
+  const avg = dailyData.reduce((s, d) => s + d.gmv, 0) / dailyData.length;
+  if (avg === 0) return { change: 0, direction: "flat" };
+  const change = Math.round(((current - avg) / avg) * 100);
+  return { change: Math.abs(change), direction: change > 0 ? "up" : change < 0 ? "down" : "flat" };
+}
+
+function scoreIssues(data: AnalyticsData, totalGMV: number): PrioritizedIssue[] {
+  const issues: PrioritizedIssue[] = [];
+  const repRate = data.totalCustomers > 0 ? Math.round(data.repeatCustomers / data.totalCustomers * 100) : 0;
+  const top3Pct = totalGMV > 0 && data.topSkuRevenue.length > 0
+    ? Math.round(data.topSkuRevenue.slice(0, 3).reduce((s, sku) => s + sku.revenue, 0) / totalGMV * 100) : 0;
+
+  if (repRate < 25) {
+    issues.push({
+      type: "problem", title: "Repeat purchase rate below target",
+      detail: `Only ${repRate}% of customers have re-ordered (target: 25%). You're leaving revenue on the table from existing customers.`,
+      action: "Prepare a win-back email campaign targeting customers who haven't re-ordered in 60 days.",
+      priority: repRate < 5 ? "high" : "medium",
+      revenueImpact: Math.round(data.totalCustomers * data.aov * (25 - repRate) / 100 * 0.05)
+    });
+  }
+  if (top3Pct > 50) {
+    issues.push({
+      type: "problem", title: "Product concentration risk",
+      detail: `Your top 3 products generated ${top3Pct}% of revenue. If one supplier fails, your business could be significantly impacted.`,
+      action: "Review inventory for top products and start promoting secondary products this week.",
+      priority: top3Pct > 70 ? "high" : "medium",
+      revenueImpact: Math.round(totalGMV * top3Pct / 100 * 0.1)
+    });
+  }
+  if (data.aov > 0) {
+    issues.push({
+      type: "insight", title: "AOV above baseline",
+      detail: `Your AOV of $${Math.round(data.aov)} indicates healthy spending. This is a positive signal for your business.`,
+      action: "Consider testing a $299 free shipping threshold to further increase average order value.",
+      priority: "low",
+      revenueImpact: 0
+    });
+  }
+  return issues.sort((a, b) => {
+    const p = { high: 3, medium: 2, low: 1 };
+    return p[b.priority] - p[a.priority];
+  });
 }
 
 export async function fetchAndComputeAnalytics(admin: { graphql: Function }): Promise<AnalyticsData> {
@@ -110,11 +160,8 @@ export async function fetchAndComputeAnalytics(admin: { graphql: Function }): Pr
   });
   const totalCatRev = Array.from(catMap.values()).reduce((s, c) => s + c.revenue, 0);
   const categoryRevenue = Array.from(catMap.entries()).sort((a, b) => b[1].revenue - a[1].revenue)
-    .map(([category, data]) => ({
-      category, revenue: Math.round(data.revenue * 100) / 100,
-      pct: totalCatRev > 0 ? Math.round(data.revenue / totalCatRev * 1000) / 10 : 0,
-      count: data.count,
-    }));
+    .map(([category, data]) => ({ category, revenue: Math.round(data.revenue * 100) / 100,
+      pct: totalCatRev > 0 ? Math.round(data.revenue / totalCatRev * 1000) / 10 : 0, count: data.count }));
 
   // Daily GMV
   const dayMap = new Map<string, { gmv: number; orders: number }>();
@@ -143,31 +190,31 @@ export async function fetchAndComputeAnalytics(admin: { graphql: Function }): Pr
     items: (o.lineItems?.edges || []).map((li: any) => li.node.name),
   }));
 
-  // Issues
-  const issues: { type: "problem" | "insight"; title: string; detail: string }[] = [];
- const convRate = customers.length > 0 ? Math.round(purchasedCustomers.length / customers.length * 100) : 0;
-  const repRate = customers.length > 0 ? Math.round(repeatBuyers.length / customers.length * 100) : 0;
- if (repRate < 5) issues.push({ type: "problem", title: "Low repurchase rate", detail: `Repurchase rate ${repRate}% - lacks retention` });
- if (convRate < 25) issues.push({ type: "problem", title: "Low conversion rate", detail: `Only ${convRate}% registered users purchased (${purchasedCustomers.length}/${customers.length})` });
- const top3Pct = paidOrders.length > 0 ? Math.round(topSkuRevenue.slice(0, 3).reduce((s, sku) => s + sku.revenue, 0) / totalGMV * 100) : 0;
-  if (top3Pct > 50) issues.push({ type: "problem", title: "Revenue concentration", detail: `Top3 SKU = ${top3Pct}% of revenue` });
-  if (AOV > 300) issues.push({ type: "insight", title: "High AOV advantage", detail: `AOV $${AOV.toFixed(0)} - good for upsell` });
-
-  return {
+  const analyticsData: AnalyticsData = {
     gmv: Math.round(totalGMV * 100) / 100, totalOrders: paidOrders.length,
     aov: Math.round(AOV * 100) / 100, totalCustomers: customers.length,
     newCustomers: recentNew.length, repeatCustomers: repeatBuyers.length,
     refundedOrders: refunded.length, refundAmount: Math.round(refundAmount * 100) / 100,
     topSkuRevenue, categoryRevenue, dailyGmv, orderValueBuckets, recentOrders,
     snapshotHistory: [],
-    issues, recommendations: [
+    issues: [],
+    recommendations: [
       "Target non-purchasing registrants with 72h free shipping",
       "Trigger abandoned cart emails within 72h",
-      "Direct ad budget to low-AOV high-conversion products (watches/earphones)",
+      "Direct ad budget to low-AOV high-conversion products",
       "Enable installment payments to reduce high-price decision barriers",
       "Flag-ship product recommendation 7 days after accessory purchase",
     ],
+    trends: {
+      gmv: computeTrend(totalGMV, dailyGmv),
+      orders: computeTrend(paidOrders.length, dailyGmv),
+      aov: computeTrend(AOV, dailyGmv),
+    },
+    prioritizedIssues: [],
   };
+
+  analyticsData.prioritizedIssues = scoreIssues(analyticsData, totalGMV);
+  return analyticsData;
 }
 
 export async function saveSnapshot(admin: { graphql: Function }, shopId: string) {
@@ -209,4 +256,3 @@ export async function getSnapshotHistory(shopId: string) {
   });
   return snapshots.map(s => ({ date: s.snapshotDate.toISOString().slice(0, 10), gmv: s.totalGMV, orders: s.totalOrders, aov: s.aov }));
 }
-
