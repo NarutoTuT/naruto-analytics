@@ -44,9 +44,9 @@ function TrendBadge({ trend }: { trend: TrendData }) {
   );
 }
 
-function PriorityBadge({ priority }: { priority: "high" | "medium" | "low" }) {
+function FocusBadge({ priority }: { priority: "high" | "medium" | "low" }) {
   const tone = priority === "high" ? "critical" : priority === "medium" ? "attention" : "success";
-  const label = priority === "high" ? "TOP PRIORITY" : priority === "medium" ? "REVIEW TODAY" : "FOR YOUR INFO";
+  const label = priority === "high" ? "Today\u2019s focus" : priority === "medium" ? "Worth a look" : "Just so you know";
   return <Badge tone={tone}>{label}</Badge>;
 }
 
@@ -54,7 +54,7 @@ function MetricsSection({ data: d }: { data: AnalyticsData }) {
   const metrics = [
     { label: "Revenue", value: formatCurrency(d.gmv), trend: d.trends.gmv },
     { label: "Orders", value: d.totalOrders.toString(), trend: d.trends.orders },
-    { label: "AOV", value: formatCurrency(d.aov), trend: d.trends.aov },
+    { label: "Average order", value: formatCurrency(d.aov), trend: d.trends.aov },
   ];
   return (
     <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "12px" }}>
@@ -94,10 +94,10 @@ function SignalCard({ issue }: { issue: PrioritizedIssue }) {
 function SupportingData({ data: d }: { data: AnalyticsData }) {
   if (d.topSkuRevenue.length === 0) return null;
   const top3 = d.topSkuRevenue.slice(0, 3);
-
   return (
     <Card padding="300">
       <BlockStack gap="200">
+        <Text as="p" variant="bodySm" fontWeight="semibold" tone="subdued">Revenue trend & top products</Text>
         <div style={{ display: "flex", gap: "4px", height: "48px", alignItems: "flex-end" }}>
           {d.dailyGmv.slice(-7).map((day, i) => (
             <div key={i} style={{
@@ -130,22 +130,24 @@ function SupportingData({ data: d }: { data: AnalyticsData }) {
 
 function LoadingSkeleton() {
   return (
-    <BlockStack gap="300">
-      <div style={{ background: "#F6F6F7", borderRadius: "10px", padding: "20px" }}>
-        <SkeletonBodyText lines={2} />
-      </div>
-      <SkeletonBodyText lines={4} />
-    </BlockStack>
+    <Page title="Today\u2019s Overview">
+      <BlockStack gap="300">
+        <Text as="p" variant="bodyMd" tone="subdued">Just a moment \u2014 pulling together today\u2019s overview.</Text>
+        <div style={{ background: "#F6F6F7", borderRadius: "10px", padding: "20px" }}>
+          <SkeletonBodyText lines={2} />
+        </div>
+        <SkeletonBodyText lines={4} />
+      </BlockStack>
+    </Page>
   );
 }
 
 function ErrorState({ message }: { message: string }) {
   return (
-    <Page title="Today Operating Brief">
-      <Banner title="Unable to prepare your briefing" tone="critical">
-        <p>{message}</p>
-        <p>We'll retry automatically. You can also sync manually.</p>
-        <Button variant="primary" onClick={() => window.location.reload()}>Retry Now</Button>
+    <Page title="Today\u2019s Overview">
+      <Banner title="We weren\u2019t able to prepare your overview right now" tone="critical">
+        <p>Don\u2019t worry \u2014 we\u2019ll try again shortly. You can also sync manually.</p>
+        <Button variant="primary" onClick={() => window.location.reload()}>Try again</Button>
       </Banner>
     </Page>
   );
@@ -153,13 +155,13 @@ function ErrorState({ message }: { message: string }) {
 
 function EmptyStateView() {
   return (
-    <Page title="Today Operating Brief">
+    <Page title="Today\u2019s Overview">
       <EmptyState
-        heading="Welcome to your Operating Brief"
-        action={{ content: "Sync Store Data Now", onAction: () => {} }}
+        heading="Welcome to your daily business overview"
+        action={{ content: "Connect my store", onAction: () => {} }}
         image={""}
       >
-        <p>Sync your store and tomorrow morning you'll receive your first daily briefing.</p>
+        <p>Connect your store to start receiving personalized daily briefings about your business.</p>
       </EmptyState>
     </Page>
   );
@@ -199,7 +201,7 @@ export default function Dashboard() {
     fetcher.submit({ action: "sync" }, { method: "POST", encType: "application/json" });
   };
 
-  const handleViewDetails = () => setDetailsOpen(!detailsOpen);
+  const toggleDetails = () => setDetailsOpen(!detailsOpen);
 
   const handleMarkReviewed = () => {
     if (topIssue) {
@@ -212,11 +214,7 @@ export default function Dashboard() {
   }
 
   if (!loaded || !loaderData || "error" in (loaderData || {})) {
-    return (
-      <Page title="Today Operating Brief">
-        <LoadingSkeleton />
-      </Page>
-    );
+    return <LoadingSkeleton />;
   }
 
   const d = loaderData as AnalyticsData;
@@ -225,11 +223,9 @@ export default function Dashboard() {
     return <EmptyStateView />;
   }
 
-  // Compute active issues (excluding reviewed ones)
   const activeIssues = d.prioritizedIssues.filter(i => !reviewedTitles.has(i.title));
   const highPriority = activeIssues.filter(i => i.priority === "high");
   const medPriority = activeIssues.filter(i => i.priority === "medium");
-  const lowIssues = activeIssues.filter(i => i.priority === "low");
 
   const status: "all-clear" | "needs-attention" | "action-required" =
     highPriority.length > 0 ? "action-required"
@@ -238,17 +234,14 @@ export default function Dashboard() {
 
   const topIssue = activeIssues.length > 0 ? activeIssues[0] : null;
   const totalRevenueImpact = activeIssues.reduce((sum, i) => sum + i.revenueImpact, 0);
-  const top3Pct = d.totalOrders > 0 && d.topSkuRevenue.length > 0
-    ? Math.round(d.topSkuRevenue.slice(0, 3).reduce((s, sku) => s + sku.revenue, 0) / d.gmv * 100) : 0;
 
-  const statusConfig = {
-    "all-clear": { dot: "\uD83D\uDFE2", color: "#008060", text: "Everything looks healthy today. No action required." },
-    "needs-attention": { dot: "\uD83D\uDFE1", color: "#B98900", text: `${activeIssues.length} issue${activeIssues.length > 1 ? 's' : ''} should be reviewed today.` },
-    "action-required": { dot: "\uD83D\uDD34", color: "#D82C0D", text: `Action required today. Estimated revenue at risk: ${formatCurrency(totalRevenueImpact)}.` },
-  };
-  const cfg = statusConfig[status];
+  const statusText = status === "all-clear"
+    ? "Good morning. Your store is running smoothly."
+    : status === "needs-attention"
+      ? "There\u2019s something you may want to look at today."
+      : `One item needs your attention today. Potential impact: ${formatCurrency(totalRevenueImpact)}.`;
 
-  const otherIssues = [...medPriority.slice(topIssue?.priority === "medium" ? 1 : 0), ...lowIssues.slice(topIssue?.priority === "low" ? 1 : 0)];
+  const otherIssues = [...medPriority.slice(topIssue?.priority === "medium" ? 1 : 0)];
 
   return (
     <Page
@@ -256,19 +249,24 @@ export default function Dashboard() {
       subtitle=""
       primaryAction={
         <Button variant="primary" icon={RefreshIcon} onClick={hSync} loading={syncing}>
-          {syncing ? "Syncing\u2026" : "Sync Data"}
+          {syncing ? "Updating\u2026" : "Update"}
         </Button>
       }
     >
       <BlockStack gap="300">
 
-        {/* Compact Status Line */}
+        {/* Status line */}
         <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "0" }}>
-          <span style={{ fontSize: "16px", lineHeight: "20px" }}>{cfg.dot}</span>
-          <Text as="p" variant="bodyMd" fontWeight="medium">{cfg.text}</Text>
+          <span style={{
+            fontSize: "14px", lineHeight: "18px",
+            color: status === "all-clear" ? "#008060" : status === "needs-attention" ? "#B98900" : "#D82C0D"
+          }}>
+            {status === "all-clear" ? "\u25CF" : "\u25CF"}
+          </span>
+          <Text as="p" variant="bodyMd" fontWeight="medium">{statusText}</Text>
         </div>
 
-        {/* Daily Decision Card */}
+        {/* Decision card */}
         {topIssue ? (
           <div style={{ border: "1px solid #E1E3E5", borderRadius: "10px", padding: "20px", position: "relative", overflow: "hidden" }}>
             <div style={{
@@ -277,28 +275,26 @@ export default function Dashboard() {
               borderRadius: "2px"
             }} />
             <BlockStack gap="200">
-              <Badge tone={topIssue.priority === "high" ? "critical" : topIssue.priority === "medium" ? "attention" : "success"}>
-                {topIssue.priority === "high" ? "TOP PRIORITY" : topIssue.priority === "medium" ? "REVIEW TODAY" : "FOR YOUR INFO"}
-              </Badge>
-              <Text as="h3" variant="headingMd" fontWeight="semibold">{topIssue.title}</Text>
+              <FocusBadge priority={topIssue.priority} />
+              <Text as="h2" variant="headingMd" fontWeight="semibold">{topIssue.title}</Text>
               <Text as="p" variant="bodyMd" tone="subdued">{topIssue.detail}</Text>
               {topIssue.revenueImpact > 0 && (
                 <Text as="p" variant="bodyMd" fontWeight="bold">
-                  Estimated revenue at risk: {formatCurrency(topIssue.revenueImpact)}
+                  Potential impact: up to {formatCurrency(topIssue.revenueImpact)}
                 </Text>
               )}
               <div style={{ background: "#F6F6F7", borderRadius: "8px", padding: "12px 16px" }}>
-                <InlineStack gap="200" align="start">
-                  <span style={{ fontSize: "14px", lineHeight: "20px" }}>\uD83D\uDCA1</span>
+                <BlockStack gap="050">
+                  <Text as="span" variant="bodyXs" tone="subdued" fontWeight="semibold">Your move</Text>
                   <Text as="p" variant="bodySm">{topIssue.action}</Text>
-                </InlineStack>
+                </BlockStack>
               </div>
               <InlineStack gap="200">
-                <Button variant="primary" onClick={handleViewDetails}>
-                  {detailsOpen ? "Hide details" : "View details"}
+                <Button variant="primary" onClick={toggleDetails}>
+                  {detailsOpen ? "Hide the numbers" : "See what\u2019s behind this"}
                 </Button>
                 <Button variant="secondary" onClick={handleMarkReviewed}>
-                  Mark as reviewed
+                  I\u2019ve got this
                 </Button>
               </InlineStack>
             </BlockStack>
@@ -308,58 +304,56 @@ export default function Dashboard() {
           <Card padding="400">
             <BlockStack gap="300">
               <InlineStack gap="300" align="start">
-                <span style={{ fontSize: "24px", lineHeight: "28px" }}>\uD83D\uDFE2</span>
+                <span style={{ fontSize: "24px", lineHeight: "28px", color: "#008060" }}>\u2713</span>
                 <BlockStack gap="100">
                   <Text as="h2" variant="headingLg" fontWeight="semibold" tone="success">
-                    Everything looks healthy today.
+                    Good morning. Your store is running smoothly.
                   </Text>
                   <Text as="p" variant="bodyMd" tone="subdued">
-                    Revenue {formatCurrency(d.gmv)} and {d.totalOrders} order{d.totalOrders !== 1 ? 's' : ''} are within your recent baseline.
+                    Yesterday brought in {formatCurrency(d.gmv)} from {d.totalOrders} order{d.totalOrders !== 1 ? 's' : ''} \u2014 consistent with your recent performance.
                   </Text>
-                  {top3Pct > 0 && (
+                  {d.totalCustomers > 0 && (
                     <Text as="p" variant="bodySm" tone="subdued">
-                      Top products generated {top3Pct}% of revenue — consistent with recent trends.
+                      You have {d.totalCustomers} customer{d.totalCustomers !== 1 ? 's' : ''} ({d.newCustomers} new in the last month). {d.repeatCustomers > 0 ? `${d.repeatCustomers} have ordered more than once.` : ''}
                     </Text>
                   )}
                 </BlockStack>
               </InlineStack>
               <InlineStack gap="200">
-                <Button variant="primary">Carry on</Button>
-                <Button variant="secondary" onClick={handleViewDetails}>
-                  {detailsOpen ? "Hide details" : "View details"}
+                <Button variant="primary">Start your day</Button>
+                <Button variant="secondary" onClick={toggleDetails}>
+                  {detailsOpen ? "Hide the numbers" : "See the details"}
                 </Button>
               </InlineStack>
             </BlockStack>
           </Card>
         )}
 
-        {/* View / Hide supporting details button */}
+        {/* View / Hide supporting details */}
         {!topIssue && (
           <div style={{ textAlign: "center", marginTop: "-8px" }}>
-            <Button variant="plain" onClick={handleViewDetails}>
-              {detailsOpen ? "Hide supporting details" : "View supporting details"}
+            <Button variant="plain" onClick={toggleDetails}>
+              {detailsOpen ? "Hide the numbers" : "See the numbers behind this"}
             </Button>
           </div>
         )}
 
-        {/* Collapsed Details */}
+        {/* Collapsed details */}
         <Collapsible open={detailsOpen} id="supporting-details">
-          <div style={{ paddingTop: "16px" }}><BlockStack gap="300">
+          <div style={{ paddingTop: "16px" }}>
+          <BlockStack gap="300">
 
-            {/* Metrics */}
             <MetricsSection data={d} />
 
-            {/* Other Signals (only show when details are open) */}
             {otherIssues.length > 0 && (
               <BlockStack gap="100">
-                <Text as="h3" variant="headingSm" fontWeight="semibold" tone="subdued">OTHER SIGNALS</Text>
+                <Text as="h3" variant="headingSm" fontWeight="semibold" tone="subdued">For your awareness</Text>
                 {otherIssues.map((issue, i) => (
                   <SignalCard key={i} issue={issue} />
                 ))}
               </BlockStack>
             )}
 
-            {/* Supporting Data */}
             <SupportingData data={d} />
 
           </BlockStack>
