@@ -7,7 +7,7 @@ import prisma from "../db.server";
 import type { AnalyticsData, PrioritizedIssue, TrendData } from "../lib/analytics.server";
 import {
   Card, Text, BlockStack, InlineStack, Badge, Banner, Button,
-  SkeletonBodyText, EmptyState, Page
+  SkeletonBodyText, EmptyState, Page, Collapsible
 } from "@shopify/polaris";
 import { RefreshIcon } from "@shopify/polaris-icons";
 
@@ -30,6 +30,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   }
 };
 
+function formatCurrency(amount: number): string {
+  return "$" + amount.toLocaleString();
+}
+
 function TrendBadge({ trend }: { trend: TrendData }) {
   if (trend.direction === "flat") return null;
   const isUp = trend.direction === "up";
@@ -41,16 +45,16 @@ function TrendBadge({ trend }: { trend: TrendData }) {
 }
 
 function PriorityBadge({ priority }: { priority: "high" | "medium" | "low" }) {
-  const tone = priority === "high" ? "critical" : priority === "medium" ? "attention" : "info";
+  const tone = priority === "high" ? "critical" : priority === "medium" ? "attention" : "success";
   const label = priority === "high" ? "TOP PRIORITY" : priority === "medium" ? "REVIEW TODAY" : "FOR YOUR INFO";
   return <Badge tone={tone}>{label}</Badge>;
 }
 
 function MetricsSection({ data: d }: { data: AnalyticsData }) {
   const metrics = [
-    { label: "Revenue", value: "$" + d.gmv.toLocaleString(), trend: d.trends.gmv },
+    { label: "Revenue", value: formatCurrency(d.gmv), trend: d.trends.gmv },
     { label: "Orders", value: d.totalOrders.toString(), trend: d.trends.orders },
-    { label: "AOV", value: "$" + d.aov.toFixed(0), trend: d.trends.aov },
+    { label: "AOV", value: formatCurrency(d.aov), trend: d.trends.aov },
   ];
   return (
     <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "12px" }}>
@@ -63,72 +67,6 @@ function MetricsSection({ data: d }: { data: AnalyticsData }) {
           </BlockStack>
         </Card>
       ))}
-    </div>
-  );
-}
-
-function StatusBanner({ data: d }: { data: AnalyticsData }) {
-  const highCount = d.prioritizedIssues.filter(i => i.priority === "high").length;
-  const medCount = d.prioritizedIssues.filter(i => i.priority === "medium").length;
-  const totalIssues = d.prioritizedIssues.length;
-
-  let status: "all-clear" | "needs-attention" | "action-required" = "all-clear";
-  if (highCount > 0) status = "action-required";
-  else if (medCount > 0) status = "needs-attention";
-
-  const statusConfig = {
-    "all-clear": { color: "#008060", bg: "#E3F1DF", text: "All Clear" },
-    "needs-attention": { color: "#B98900", bg: "#FFF5C2", text: "Needs Attention" },
-    "action-required": { color: "#D82C0D", bg: "#FED3D1", text: "Action Required" },
-  };
-
-  const cfg = statusConfig[status];
-
-  return (
-    <div style={{ background: cfg.bg, borderRadius: "10px", padding: "20px", marginBottom: "16px" }}>
-      <BlockStack gap="200">
-        <Text as="h2" variant="headingLg">Good morning, your store.</Text>
-        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-          <div style={{ width: "12px", height: "12px", borderRadius: "50%", background: cfg.color }} />
-          <Text as="span" variant="headingSm" fontWeight="semibold" tone={status === "action-required" ? "critical" : "subdued"}>
-            {cfg.text}
-          </Text>
-        </div>
-        {totalIssues > 0 && (
-          <Text as="p" variant="bodySm" tone="subdued">
-            {totalIssues} issue{totalIssues > 1 ? "s" : ""} detected. {highCount > 0 ? highCount + " need" : medCount > 0 ? medCount + " need" : ""} action today.
-          </Text>
-        )}
-      </BlockStack>
-    </div>
-  );
-}
-
-function PriorityCardSection({ issue }: { issue: PrioritizedIssue }) {
-  const accentColor = issue.priority === "high" ? "#D82C0D" : issue.priority === "medium" ? "#B98900" : "#008060";
-  return (
-    <div style={{
-      border: "1px solid #E1E3E5", borderRadius: "10px", padding: "20px",
-      position: "relative", overflow: "hidden", marginBottom: "12px"
-    }}>
-      <div style={{ position: "absolute", left: 0, top: 0, width: "4px", height: "100%", background: accentColor, borderRadius: "2px" }} />
-      <BlockStack gap="200">
-        <PriorityBadge priority={issue.priority} />
-        <Text as="h3" variant="headingMd" fontWeight="semibold">{issue.title}</Text>
-        <Text as="p" variant="bodyMd" tone="subdued">{issue.detail}</Text>
-        {issue.revenueImpact > 0 && (
-          <Text as="p" variant="bodyMd" fontWeight="bold">
-            Estimated impact: ${issue.revenueImpact.toLocaleString()}
-          </Text>
-        )}
-        <Text as="p" variant="bodySm">
-          <Text as="strong" fontWeight="bold">Action: </Text>{issue.action}
-        </Text>
-        <InlineStack gap="200">
-          <Button variant="primary" size="slim">View Details</Button>
-          <Button variant="secondary" size="slim">Mark as Reviewed</Button>
-        </InlineStack>
-      </BlockStack>
     </div>
   );
 }
@@ -156,10 +94,10 @@ function SignalCard({ issue }: { issue: PrioritizedIssue }) {
 function SupportingData({ data: d }: { data: AnalyticsData }) {
   if (d.topSkuRevenue.length === 0) return null;
   const top3 = d.topSkuRevenue.slice(0, 3);
+
   return (
     <Card padding="300">
       <BlockStack gap="200">
-        <Text as="h3" variant="headingSm" fontWeight="semibold">\uD83D\uDCCA Supporting Data</Text>
         <div style={{ display: "flex", gap: "4px", height: "48px", alignItems: "flex-end" }}>
           {d.dailyGmv.slice(-7).map((day, i) => (
             <div key={i} style={{
@@ -180,7 +118,7 @@ function SupportingData({ data: d }: { data: AnalyticsData }) {
             {top3.map((sku, i) => (
               <tr key={i}>
                 <td style={{ padding: "8px 12px", borderBottom: "1px solid #F1F2F3" }}>{sku.name.length > 30 ? sku.name.slice(0, 30) + "\u2026" : sku.name}</td>
-                <td style={{ padding: "8px 12px", borderBottom: "1px solid #F1F2F3", textAlign: "right", fontWeight: 600 }}>${sku.revenue.toLocaleString()}</td>
+                <td style={{ padding: "8px 12px", borderBottom: "1px solid #F1F2F3", textAlign: "right", fontWeight: 600 }}>{formatCurrency(sku.revenue)}</td>
               </tr>
             ))}
           </tbody>
@@ -194,14 +132,8 @@ function LoadingSkeleton() {
   return (
     <BlockStack gap="300">
       <div style={{ background: "#F6F6F7", borderRadius: "10px", padding: "20px" }}>
-        <SkeletonBodyText lines={3} />
+        <SkeletonBodyText lines={2} />
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "12px" }}>
-        <SkeletonBodyText lines={3} />
-        <SkeletonBodyText lines={3} />
-        <SkeletonBodyText lines={3} />
-      </div>
-      <SkeletonBodyText lines={3} />
       <SkeletonBodyText lines={4} />
     </BlockStack>
   );
@@ -227,7 +159,7 @@ function EmptyStateView() {
         action={{ content: "Sync Store Data Now", onAction: () => {} }}
         image={""}
       >
-        <p>Sync your store and tomorrow morning you'll receive your first daily briefing — revenue trends, alerts, and prioritized actions.</p>
+        <p>Sync your store and tomorrow morning you'll receive your first daily briefing.</p>
       </EmptyState>
     </Page>
   );
@@ -239,7 +171,10 @@ export default function Dashboard() {
   const [loaded, setLoaded] = useState(false);
   const [hasError, setHasError] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [reviewedTitles, setReviewedTitles] = useState<Set<string>>(new Set());
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const loaderData = useLoaderData() as (AnalyticsData & { error?: string }) | undefined;
 
   useEffect(() => { setLoaded(true); }, []);
@@ -264,6 +199,14 @@ export default function Dashboard() {
     fetcher.submit({ action: "sync" }, { method: "POST", encType: "application/json" });
   };
 
+  const handleViewDetails = () => setDetailsOpen(!detailsOpen);
+
+  const handleMarkReviewed = () => {
+    if (topIssue) {
+      setReviewedTitles(prev => new Set(prev).add(topIssue.title));
+    }
+  };
+
   if (hasError) {
     return <ErrorState message={errorMsg} />;
   }
@@ -282,55 +225,146 @@ export default function Dashboard() {
     return <EmptyStateView />;
   }
 
-  const highPriority = d.prioritizedIssues.filter(i => i.priority === "high");
-  const medPriority = d.prioritizedIssues.filter(i => i.priority === "medium");
-  const lowPriority = d.prioritizedIssues.filter(i => i.priority === "low");
-  const topIssue = highPriority.length > 0 ? highPriority[0] : medPriority.length > 0 ? medPriority[0] : lowPriority[0];
-  const otherIssues = [...highPriority.slice(1), ...medPriority.slice(topIssue?.priority === "medium" ? 1 : 0), ...lowPriority.slice(topIssue?.priority === "low" ? 1 : 0)];
+  // Compute active issues (excluding reviewed ones)
+  const activeIssues = d.prioritizedIssues.filter(i => !reviewedTitles.has(i.title));
+  const highPriority = activeIssues.filter(i => i.priority === "high");
+  const medPriority = activeIssues.filter(i => i.priority === "medium");
+  const lowIssues = activeIssues.filter(i => i.priority === "low");
+
+  const status: "all-clear" | "needs-attention" | "action-required" =
+    highPriority.length > 0 ? "action-required"
+    : medPriority.length > 0 ? "needs-attention"
+    : "all-clear";
+
+  const topIssue = activeIssues.length > 0 ? activeIssues[0] : null;
+  const totalRevenueImpact = activeIssues.reduce((sum, i) => sum + i.revenueImpact, 0);
+  const top3Pct = d.totalOrders > 0 && d.topSkuRevenue.length > 0
+    ? Math.round(d.topSkuRevenue.slice(0, 3).reduce((s, sku) => s + sku.revenue, 0) / d.gmv * 100) : 0;
+
+  const statusConfig = {
+    "all-clear": { dot: "\uD83D\uDFE2", color: "#008060", text: "Everything looks healthy today. No action required." },
+    "needs-attention": { dot: "\uD83D\uDFE1", color: "#B98900", text: `${activeIssues.length} issue${activeIssues.length > 1 ? 's' : ''} should be reviewed today.` },
+    "action-required": { dot: "\uD83D\uDD34", color: "#D82C0D", text: `Action required today. Estimated revenue at risk: ${formatCurrency(totalRevenueImpact)}.` },
+  };
+  const cfg = statusConfig[status];
+
+  const otherIssues = [...medPriority.slice(topIssue?.priority === "medium" ? 1 : 0), ...lowIssues.slice(topIssue?.priority === "low" ? 1 : 0)];
 
   return (
     <Page
       title=""
       subtitle=""
       primaryAction={
-        <Button
-          variant="primary"
-          icon={RefreshIcon}
-          onClick={hSync}
-          loading={syncing}
-        >
+        <Button variant="primary" icon={RefreshIcon} onClick={hSync} loading={syncing}>
           {syncing ? "Syncing\u2026" : "Sync Data"}
         </Button>
       }
     >
       <BlockStack gap="300">
 
-        {/* Status Banner */}
-        <StatusBanner data={d} />
+        {/* Compact Status Line */}
+        <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "0" }}>
+          <span style={{ fontSize: "16px", lineHeight: "20px" }}>{cfg.dot}</span>
+          <Text as="p" variant="bodyMd" fontWeight="medium">{cfg.text}</Text>
+        </div>
 
-        {/* Metrics Row */}
-        <MetricsSection data={d} />
-
-        {/* Top Priority Card */}
-        {topIssue && (
-          <BlockStack gap="100">
-            <Text as="h3" variant="headingSm" fontWeight="semibold" tone="subdued">TOP PRIORITY</Text>
-            <PriorityCardSection issue={topIssue} />
-          </BlockStack>
+        {/* Daily Decision Card */}
+        {topIssue ? (
+          <div style={{ border: "1px solid #E1E3E5", borderRadius: "10px", padding: "20px", position: "relative", overflow: "hidden" }}>
+            <div style={{
+              position: "absolute", left: 0, top: 0, width: "4px", height: "100%",
+              background: topIssue.priority === "high" ? "#D82C0D" : topIssue.priority === "medium" ? "#B98900" : "#008060",
+              borderRadius: "2px"
+            }} />
+            <BlockStack gap="200">
+              <Badge tone={topIssue.priority === "high" ? "critical" : topIssue.priority === "medium" ? "attention" : "success"}>
+                {topIssue.priority === "high" ? "TOP PRIORITY" : topIssue.priority === "medium" ? "REVIEW TODAY" : "FOR YOUR INFO"}
+              </Badge>
+              <Text as="h3" variant="headingMd" fontWeight="semibold">{topIssue.title}</Text>
+              <Text as="p" variant="bodyMd" tone="subdued">{topIssue.detail}</Text>
+              {topIssue.revenueImpact > 0 && (
+                <Text as="p" variant="bodyMd" fontWeight="bold">
+                  Estimated revenue at risk: {formatCurrency(topIssue.revenueImpact)}
+                </Text>
+              )}
+              <div style={{ background: "#F6F6F7", borderRadius: "8px", padding: "12px 16px" }}>
+                <InlineStack gap="200" align="start">
+                  <span style={{ fontSize: "14px", lineHeight: "20px" }}>\uD83D\uDCA1</span>
+                  <Text as="p" variant="bodySm">{topIssue.action}</Text>
+                </InlineStack>
+              </div>
+              <InlineStack gap="200">
+                <Button variant="primary" onClick={handleViewDetails}>
+                  {detailsOpen ? "Hide details" : "View details"}
+                </Button>
+                <Button variant="secondary" onClick={handleMarkReviewed}>
+                  Mark as reviewed
+                </Button>
+              </InlineStack>
+            </BlockStack>
+          </div>
+        ) : (
+          /* All Clear */
+          <Card padding="400">
+            <BlockStack gap="300">
+              <InlineStack gap="300" align="start">
+                <span style={{ fontSize: "24px", lineHeight: "28px" }}>\uD83D\uDFE2</span>
+                <BlockStack gap="100">
+                  <Text as="h2" variant="headingLg" fontWeight="semibold" tone="success">
+                    Everything looks healthy today.
+                  </Text>
+                  <Text as="p" variant="bodyMd" tone="subdued">
+                    Revenue {formatCurrency(d.gmv)} and {d.totalOrders} order{d.totalOrders !== 1 ? 's' : ''} are within your recent baseline.
+                  </Text>
+                  {top3Pct > 0 && (
+                    <Text as="p" variant="bodySm" tone="subdued">
+                      Top products generated {top3Pct}% of revenue — consistent with recent trends.
+                    </Text>
+                  )}
+                </BlockStack>
+              </InlineStack>
+              <InlineStack gap="200">
+                <Button variant="primary">Carry on</Button>
+                <Button variant="secondary" onClick={handleViewDetails}>
+                  {detailsOpen ? "Hide details" : "View details"}
+                </Button>
+              </InlineStack>
+            </BlockStack>
+          </Card>
         )}
 
-        {/* Other Signals */}
-        {otherIssues.length > 0 && (
-          <BlockStack gap="100">
-            <Text as="h3" variant="headingSm" fontWeight="semibold" tone="subdued">OTHER SIGNALS</Text>
-            {otherIssues.map((issue, i) => (
-              <SignalCard key={i} issue={issue} />
-            ))}
-          </BlockStack>
+        {/* View / Hide supporting details button */}
+        {!topIssue && (
+          <div style={{ textAlign: "center", marginTop: "-8px" }}>
+            <Button variant="plain" onClick={handleViewDetails}>
+              {detailsOpen ? "Hide supporting details" : "View supporting details"}
+            </Button>
+          </div>
         )}
 
-        {/* Supporting Data */}
-        <SupportingData data={d} />
+        {/* Collapsed Details */}
+        <Collapsible open={detailsOpen} id="supporting-details">
+          <div style={{ paddingTop: "16px" }}><BlockStack gap="300">
+
+            {/* Metrics */}
+            <MetricsSection data={d} />
+
+            {/* Other Signals (only show when details are open) */}
+            {otherIssues.length > 0 && (
+              <BlockStack gap="100">
+                <Text as="h3" variant="headingSm" fontWeight="semibold" tone="subdued">OTHER SIGNALS</Text>
+                {otherIssues.map((issue, i) => (
+                  <SignalCard key={i} issue={issue} />
+                ))}
+              </BlockStack>
+            )}
+
+            {/* Supporting Data */}
+            <SupportingData data={d} />
+
+          </BlockStack>
+          </div>
+        </Collapsible>
 
       </BlockStack>
     </Page>
