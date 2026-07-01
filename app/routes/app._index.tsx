@@ -1,158 +1,338 @@
 import type { LoaderFunctionArgs } from "react-router";
-import { useLoaderData, useFetcher, data, type MetaArgs } from "react-router";
+import { useLoaderData, useFetcher, data } from "react-router";
 import { useEffect, useState, useMemo } from "react";
 import { authenticate } from "../shopify.server";
 import { fetchAndComputeAnalytics, getSnapshotHistory } from "../lib/analytics.server";
 import prisma from "../db.server";
-import type { AnalyticsData } from "../lib/analytics.server";
+import type { AnalyticsData, PrioritizedIssue, TrendData } from "../lib/analytics.server";
+import {
+  Card, Text, BlockStack, InlineStack, Badge, Banner, Button,
+  SkeletonBodyText, EmptyState, Page
+} from "@shopify/polaris";
+import { RefreshIcon } from "@shopify/polaris-icons";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   try {
-  const { admin, session } = await authenticate.admin(request);
-  let shopRecord = await prisma.shop.findUnique({ where: { myshopifyDomain: session.shop } });
-  if (!shopRecord) {
-    const r = await admin.graphql(`query { shop { id name email myshopifyDomain createdAt } }`);
-    const j = await r.json();
-    const s = j.data.shop;
-    shopRecord = await prisma.shop.create({ data: { id: s.id, myshopifyDomain: s.myshopifyDomain, name: s.name, email: s.email, createdAt: new Date(s.createdAt) } });
-  }
-  const analyticsData = await fetchAndComputeAnalytics(admin);
-  analyticsData.snapshotHistory = await getSnapshotHistory(shopRecord.id);
-  return data(analyticsData);
+    const { admin, session } = await authenticate.admin(request);
+    let shopRecord = await prisma.shop.findUnique({ where: { myshopifyDomain: session.shop } });
+    if (!shopRecord) {
+      const r = await admin.graphql("query { shop { id name email myshopifyDomain createdAt } }");
+      const j = await r.json();
+      const s = j.data.shop;
+      shopRecord = await prisma.shop.create({ data: { id: s.id, myshopifyDomain: s.myshopifyDomain, name: s.name, email: s.email, createdAt: new Date(s.createdAt) } });
+    }
+    const analyticsData = await fetchAndComputeAnalytics(admin);
+    analyticsData.snapshotHistory = await getSnapshotHistory(shopRecord.id);
+    return data(analyticsData);
   } catch (err) {
     console.error("Loader error:", err);
     return data({ error: err instanceof Error ? err.message : "Unknown error" }, { status: 500 });
   }
 };
 
-export default function Dashboard() {
-  // @ts-expect-error - handle error case
-  const errData = useLoaderData() as AnalyticsData & { error?: string };
-  if (errData.error) {
-    return <div style={{ padding: 24, fontFamily: "system-ui" }}>
-      <h2 style={{ color: "#d83" }}>Error loading dashboard</h2>
-      <p>{errData.error}</p>
-    </div>;
-  }
-  const data = errData;
-  const fetcher = useFetcher();
-  const [syncing, setSyncing] = useState(false);
+function TrendBadge({ trend }: { trend: TrendData }) {
+  if (trend.direction === "flat") return null;
+  const isUp = trend.direction === "up";
+  return (
+    <Text as="span" variant="bodyXs" tone={isUp ? "success" : "critical"}>
+      {isUp ? "\u2191" : "\u2193"}{trend.change}%
+    </Text>
+  );
+}
 
-  useEffect(() => { if (fetcher.state === "idle" && fetcher.data) { setSyncing(false); window.location.reload(); } }, [fetcher.state]);
+function PriorityBadge({ priority }: { priority: "high" | "medium" | "low" }) {
+  const tone = priority === "high" ? "critical" : priority === "medium" ? "attention" : "info";
+  const label = priority === "high" ? "TOP PRIORITY" : priority === "medium" ? "REVIEW TODAY" : "FOR YOUR INFO";
+  return <Badge tone={tone}>{label}</Badge>;
+}
 
-  const hSync = () => { setSyncing(true); fetcher.submit({ action: "sync" }, { method: "POST", encType: "application/json" }); };
+function MetricsSection({ data: d }: { data: AnalyticsData }) {
+  const metrics = [
+    { label: "Revenue", value: "$" + d.gmv.toLocaleString(), trend: d.trends.gmv },
+    { label: "Orders", value: d.totalOrders.toString(), trend: d.trends.orders },
+    { label: "AOV", value: "$" + d.aov.toFixed(0), trend: d.trends.aov },
+  ];
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "12px" }}>
+      {metrics.map(m => (
+        <Card key={m.label} padding="300">
+          <BlockStack gap="100">
+            <Text as="span" variant="bodyXs" tone="subdued">{m.label}</Text>
+            <Text as="span" variant="headingXl" fontWeight="bold">{m.value}</Text>
+            {m.trend && <TrendBadge trend={m.trend} />}
+          </BlockStack>
+        </Card>
+      ))}
+    </div>
+  );
+}
 
-  const maxGmv = useMemo(() => Math.max(...data.dailyGmv.map(d => d.gmv), 1), [data.dailyGmv]);
-  const maxBucket = useMemo(() => Math.max(...data.orderValueBuckets.map(b => b.count), 1), [data.orderValueBuckets]);
-  const maxCat = useMemo(() => Math.max(...data.categoryRevenue.map(c => c.revenue), 1), [data.categoryRevenue]);
+function StatusBanner({ data: d }: { data: AnalyticsData }) {
+  const highCount = d.prioritizedIssues.filter(i => i.priority === "high").length;
+  const medCount = d.prioritizedIssues.filter(i => i.priority === "medium").length;
+  const totalIssues = d.prioritizedIssues.length;
+
+  let status: "all-clear" | "needs-attention" | "action-required" = "all-clear";
+  if (highCount > 0) status = "action-required";
+  else if (medCount > 0) status = "needs-attention";
+
+  const statusConfig = {
+    "all-clear": { color: "#008060", bg: "#E3F1DF", text: "All Clear" },
+    "needs-attention": { color: "#B98900", bg: "#FFF5C2", text: "Needs Attention" },
+    "action-required": { color: "#D82C0D", bg: "#FED3D1", text: "Action Required" },
+  };
+
+  const cfg = statusConfig[status];
 
   return (
-    <s-page heading="Naruto Analytics">
-      <s-button slot="primary-action" onClick={hSync} {...(syncing ? { loading: "true" } : {})}>
-        {syncing ? "Syncing..." : "Sync Data"}
-      </s-button>
+    <div style={{ background: cfg.bg, borderRadius: "10px", padding: "20px", marginBottom: "16px" }}>
+      <BlockStack gap="200">
+        <Text as="h2" variant="headingLg">Good morning, your store.</Text>
+        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          <div style={{ width: "12px", height: "12px", borderRadius: "50%", background: cfg.color }} />
+          <Text as="span" variant="headingSm" fontWeight="semibold" tone={status === "action-required" ? "critical" : "subdued"}>
+            {cfg.text}
+          </Text>
+        </div>
+        {totalIssues > 0 && (
+          <Text as="p" variant="bodySm" tone="subdued">
+            {totalIssues} issue{totalIssues > 1 ? "s" : ""} detected. {highCount > 0 ? highCount + " need" : medCount > 0 ? medCount + " need" : ""} action today.
+          </Text>
+        )}
+      </BlockStack>
+    </div>
+  );
+}
 
-      <s-grid gap="base" columns="5">
-        <s-box padding="base" borderWidth="base" borderRadius="base"><s-text variant="headingXs" tone="subdued">GMV</s-text><s-text variant="headingXl" fontWeight="bold">${data.gmv.toLocaleString()}</s-text></s-box>
-        <s-box padding="base" borderWidth="base" borderRadius="base"><s-text variant="headingXs" tone="subdued">Orders</s-text><s-text variant="headingXl" fontWeight="bold">{data.totalOrders}</s-text></s-box>
-        <s-box padding="base" borderWidth="base" borderRadius="base"><s-text variant="headingXs" tone="subdued">AOV</s-text><s-text variant="headingXl" fontWeight="bold">${data.aov.toFixed(0)}</s-text></s-box>
-        <s-box padding="base" borderWidth="base" borderRadius="base"><s-text variant="headingXs" tone="subdued">Customers</s-text><s-text variant="headingXl" fontWeight="bold">{data.totalCustomers}</s-text></s-box>
-        <s-box padding="base" borderWidth="base" borderRadius="base"><s-text variant="headingXs" tone="subdued">Repeat</s-text><s-text variant="headingXl" fontWeight="bold">{data.repeatCustomers}</s-text></s-box>
-      </s-grid>
+function PriorityCardSection({ issue }: { issue: PrioritizedIssue }) {
+  const accentColor = issue.priority === "high" ? "#D82C0D" : issue.priority === "medium" ? "#B98900" : "#008060";
+  return (
+    <div style={{
+      border: "1px solid #E1E3E5", borderRadius: "10px", padding: "20px",
+      position: "relative", overflow: "hidden", marginBottom: "12px"
+    }}>
+      <div style={{ position: "absolute", left: 0, top: 0, width: "4px", height: "100%", background: accentColor, borderRadius: "2px" }} />
+      <BlockStack gap="200">
+        <PriorityBadge priority={issue.priority} />
+        <Text as="h3" variant="headingMd" fontWeight="semibold">{issue.title}</Text>
+        <Text as="p" variant="bodyMd" tone="subdued">{issue.detail}</Text>
+        {issue.revenueImpact > 0 && (
+          <Text as="p" variant="bodyMd" fontWeight="bold">
+            Estimated impact: ${issue.revenueImpact.toLocaleString()}
+          </Text>
+        )}
+        <Text as="p" variant="bodySm">
+          <Text as="strong" fontWeight="bold">Action: </Text>{issue.action}
+        </Text>
+        <InlineStack gap="200">
+          <Button variant="primary" size="slim">View Details</Button>
+          <Button variant="secondary" size="slim">Mark as Reviewed</Button>
+        </InlineStack>
+      </BlockStack>
+    </div>
+  );
+}
 
-      <s-box padding="base" borderWidth="base" borderRadius="base" marginBlockStart="base">
-        <s-text variant="headingMd" fontWeight="bold">Daily GMV (Last 14 Days)</s-text>
-        <div style={{ display:"flex", alignItems:"flex-end", gap:4, height:120, marginTop:12 }}>
-          {data.dailyGmv.map(d => (
-            <div key={d.date} style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", height:"100%", justifyContent:"flex-end" }}>
-              <s-text variant="headingXs" tone="subdued">${d.gmv.toFixed(0)}</s-text>
-              <div style={{ width:"100%", height:Math.max((d.gmv/maxGmv)*100,4), background:"#5c6ac4", borderRadius:4, minHeight:4 }} />
-              <s-text variant="bodyXs" tone="subdued">{d.date.slice(5)}</s-text>
-            </div>
+function SignalCard({ issue }: { issue: PrioritizedIssue }) {
+  const dotColor = issue.priority === "medium" ? "#B98900" : "#008060";
+  return (
+    <div style={{ border: "1px solid #E1E3E5", borderRadius: "8px", padding: "14px 16px", marginBottom: "8px" }}>
+      <BlockStack gap="100">
+        <InlineStack gap="200" align="start">
+          <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: dotColor, marginTop: "6px", flexShrink: 0 }} />
+          <BlockStack gap="050">
+            <Text as="span" variant="bodySm" fontWeight="semibold">{issue.title}</Text>
+            <Text as="span" variant="bodySm" tone="subdued">{issue.detail}</Text>
+          </BlockStack>
+        </InlineStack>
+        <div style={{ paddingLeft: "16px" }}>
+          <Text as="span" variant="bodyXs" tone="success">{issue.action}</Text>
+        </div>
+      </BlockStack>
+    </div>
+  );
+}
+
+function SupportingData({ data: d }: { data: AnalyticsData }) {
+  if (d.topSkuRevenue.length === 0) return null;
+  const top3 = d.topSkuRevenue.slice(0, 3);
+  return (
+    <Card padding="300">
+      <BlockStack gap="200">
+        <Text as="h3" variant="headingSm" fontWeight="semibold">\uD83D\uDCCA Supporting Data</Text>
+        <div style={{ display: "flex", gap: "4px", height: "48px", alignItems: "flex-end" }}>
+          {d.dailyGmv.slice(-7).map((day, i) => (
+            <div key={i} style={{
+              flex: 1, borderRadius: "2px 2px 0 0", minHeight: "4px",
+              height: Math.max((day.gmv / Math.max(...d.dailyGmv.slice(-7).map(x => x.gmv), 1)) * 48, 4),
+              background: "#5C6AC4", opacity: 0.7
+            }} />
           ))}
         </div>
-      </s-box>
-
-      <s-grid gap="base" marginBlockStart="base" columns="2">
-        <s-box padding="base" borderWidth="base" borderRadius="base">
-          <s-text variant="headingMd" fontWeight="bold">Revenue by Category</s-text>
-          <s-stack direction="block" gap="tight" marginBlockStart="base">
-            {data.categoryRevenue.map(c => (
-              <div key={c.category} style={{ display:"flex", alignItems:"center", gap:8 }}>
-                <div style={{ width:100, flexShrink:0 }}><s-text variant="bodySm">{c.category}</s-text></div>
-                <div style={{ flex:1, height:24, background:"#f0f0f0", borderRadius:4, overflow:"hidden" }}>
-                  <div style={{ height:"100%", width:(c.revenue/maxCat*100)+"%", background:"#5c6ac4", borderRadius:4, minWidth:4, transition:"width 0.5s" }} />
-                </div>
-                <s-text variant="bodySm" fontWeight="bold" style={{ width:80, textAlign:"right" }}>${c.revenue.toFixed(0)}</s-text>
-                <s-text variant="bodySm" tone="subdued" style={{ width:40, textAlign:"right" }}>{c.pct}%</s-text>
-              </div>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
+          <thead>
+            <tr>
+              <th style={{ textAlign: "left", padding: "8px 12px", fontWeight: 600, color: "#6D7175", fontSize: "12px", borderBottom: "1px solid #F1F2F3" }}>Product</th>
+              <th style={{ textAlign: "right", padding: "8px 12px", fontWeight: 600, color: "#6D7175", fontSize: "12px", borderBottom: "1px solid #F1F2F3" }}>Revenue</th>
+            </tr>
+          </thead>
+          <tbody>
+            {top3.map((sku, i) => (
+              <tr key={i}>
+                <td style={{ padding: "8px 12px", borderBottom: "1px solid #F1F2F3" }}>{sku.name.length > 30 ? sku.name.slice(0, 30) + "\u2026" : sku.name}</td>
+                <td style={{ padding: "8px 12px", borderBottom: "1px solid #F1F2F3", textAlign: "right", fontWeight: 600 }}>${sku.revenue.toLocaleString()}</td>
+              </tr>
             ))}
-          </s-stack>
-        </s-box>
+          </tbody>
+        </table>
+      </BlockStack>
+    </Card>
+  );
+}
 
-        <s-box padding="base" borderWidth="base" borderRadius="base">
-          <s-text variant="headingMd" fontWeight="bold">Order Value</s-text>
-          <s-stack direction="block" gap="tight" marginBlockStart="base">
-            {data.orderValueBuckets.map(b => (
-              <div key={b.label} style={{ display:"flex", alignItems:"center", gap:8 }}>
-                <div style={{ width:70, flexShrink:0 }}><s-text variant="bodySm">{b.label}</s-text></div>
-                <div style={{ flex:1, height:24, background:"#f0f0f0", borderRadius:4, overflow:"hidden" }}>
-                  <div style={{ height:"100%", width:(b.count/maxBucket*100)+"%", background:"#47c1bf", borderRadius:4, minWidth:4 }} />
-                </div>
-                <s-text variant="bodySm" fontWeight="bold" style={{ width:40, textAlign:"right" }}>{b.count}</s-text>
-                <s-text variant="bodySm" tone="subdued" style={{ width:40, textAlign:"right" }}>{b.pct}%</s-text>
-              </div>
+function LoadingSkeleton() {
+  return (
+    <BlockStack gap="300">
+      <div style={{ background: "#F6F6F7", borderRadius: "10px", padding: "20px" }}>
+        <SkeletonBodyText lines={3} />
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "12px" }}>
+        <SkeletonBodyText lines={3} />
+        <SkeletonBodyText lines={3} />
+        <SkeletonBodyText lines={3} />
+      </div>
+      <SkeletonBodyText lines={3} />
+      <SkeletonBodyText lines={4} />
+    </BlockStack>
+  );
+}
+
+function ErrorState({ message }: { message: string }) {
+  return (
+    <Page title="Today Operating Brief">
+      <Banner title="Unable to prepare your briefing" tone="critical">
+        <p>{message}</p>
+        <p>We'll retry automatically. You can also sync manually.</p>
+        <Button variant="primary" onClick={() => window.location.reload()}>Retry Now</Button>
+      </Banner>
+    </Page>
+  );
+}
+
+function EmptyStateView() {
+  return (
+    <Page title="Today Operating Brief">
+      <EmptyState
+        heading="Welcome to your Operating Brief"
+        action={{ content: "Sync Store Data Now", onAction: () => {} }}
+        image={""}
+      >
+        <p>Sync your store and tomorrow morning you'll receive your first daily briefing — revenue trends, alerts, and prioritized actions.</p>
+      </EmptyState>
+    </Page>
+  );
+}
+
+export default function Dashboard() {
+  const fetcher = useFetcher();
+  const [syncing, setSyncing] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+  const [hasError, setHasError] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
+
+  const loaderData = useLoaderData() as (AnalyticsData & { error?: string }) | undefined;
+
+  useEffect(() => { setLoaded(true); }, []);
+
+  useEffect(() => {
+    if (!loaderData) return;
+    if ("error" in loaderData && loaderData.error) {
+      setHasError(true);
+      setErrorMsg(loaderData.error);
+    }
+  }, [loaderData]);
+
+  useEffect(() => {
+    if (fetcher.state === "idle" && fetcher.data) {
+      setSyncing(false);
+      window.location.reload();
+    }
+  }, [fetcher.state]);
+
+  const hSync = () => {
+    setSyncing(true);
+    fetcher.submit({ action: "sync" }, { method: "POST", encType: "application/json" });
+  };
+
+  if (hasError) {
+    return <ErrorState message={errorMsg} />;
+  }
+
+  if (!loaded || !loaderData || "error" in (loaderData || {})) {
+    return (
+      <Page title="Today Operating Brief">
+        <LoadingSkeleton />
+      </Page>
+    );
+  }
+
+  const d = loaderData as AnalyticsData;
+
+  if (d.gmv === 0 && d.totalOrders === 0 && d.totalCustomers === 0) {
+    return <EmptyStateView />;
+  }
+
+  const highPriority = d.prioritizedIssues.filter(i => i.priority === "high");
+  const medPriority = d.prioritizedIssues.filter(i => i.priority === "medium");
+  const lowPriority = d.prioritizedIssues.filter(i => i.priority === "low");
+  const topIssue = highPriority.length > 0 ? highPriority[0] : medPriority.length > 0 ? medPriority[0] : lowPriority[0];
+  const otherIssues = [...highPriority.slice(1), ...medPriority.slice(topIssue?.priority === "medium" ? 1 : 0), ...lowPriority.slice(topIssue?.priority === "low" ? 1 : 0)];
+
+  return (
+    <Page
+      title=""
+      subtitle=""
+      primaryAction={
+        <Button
+          variant="primary"
+          icon={RefreshIcon}
+          onClick={hSync}
+          loading={syncing}
+        >
+          {syncing ? "Syncing\u2026" : "Sync Data"}
+        </Button>
+      }
+    >
+      <BlockStack gap="300">
+
+        {/* Status Banner */}
+        <StatusBanner data={d} />
+
+        {/* Metrics Row */}
+        <MetricsSection data={d} />
+
+        {/* Top Priority Card */}
+        {topIssue && (
+          <BlockStack gap="100">
+            <Text as="h3" variant="headingSm" fontWeight="semibold" tone="subdued">TOP PRIORITY</Text>
+            <PriorityCardSection issue={topIssue} />
+          </BlockStack>
+        )}
+
+        {/* Other Signals */}
+        {otherIssues.length > 0 && (
+          <BlockStack gap="100">
+            <Text as="h3" variant="headingSm" fontWeight="semibold" tone="subdued">OTHER SIGNALS</Text>
+            {otherIssues.map((issue, i) => (
+              <SignalCard key={i} issue={issue} />
             ))}
-          </s-stack>
-        </s-box>
-      </s-grid>
+          </BlockStack>
+        )}
 
-      <s-box padding="base" borderWidth="base" borderRadius="base" marginBlockStart="base">
-        <s-text variant="headingMd" fontWeight="bold">Top SKUs</s-text>
-        <s-table><s-thead><s-tr><s-th>#</s-th><s-th>SKU</s-th><s-th>Revenue</s-th><s-th>Qty</s-th><s-th>Orders</s-th></s-tr></s-thead>
-          <s-tbody>{data.topSkuRevenue.slice(0,10).map((s,i) => (
-            <s-tr key={i}><s-td>{i+1}</s-td><s-td><s-text variant="bodySm" fontWeight="bold">{s.name.length>35?s.name.slice(0,35)+"...":s.name}</s-text></s-td><s-td><s-text fontWeight="bold">${s.revenue.toFixed(2)}</s-text></s-td><s-td>{s.qty}</s-td><s-td>{s.orders}</s-td></s-tr>
-          ))}</s-tbody>
-        </s-table>
-      </s-box>
+        {/* Supporting Data */}
+        <SupportingData data={d} />
 
-      {data.issues.length>0 && (
-        <s-grid gap="base" marginBlockStart="base" columns={data.issues.length>1?"2":"1"}>
-          {data.issues.map((issue,i) => (
-            <s-box key={i} padding="base" borderWidth="base" borderRadius="base" background={issue.type==="problem"?"criticalSubdued":"successSubdued"}>
-              <s-text variant="headingSm" fontWeight="bold">{issue.type==="problem"?"⚠️":"💡"}{issue.title}</s-text>
-              <s-paragraph>{issue.detail}</s-paragraph>
-            </s-box>
-          ))}
-        </s-grid>
-      )}
-
-      <s-box padding="base" borderWidth="base" borderRadius="base" marginBlockStart="base">
-        <s-text variant="headingMd" fontWeight="bold">Growth Recommendations</s-text>
-        <s-unordered-list marginBlockStart="base">
-          {data.recommendations.map((r,i) => (<s-list-item key={i}><s-text>{r}</s-text></s-list-item>))}
-        </s-unordered-list>
-      </s-box>
-
-      {data.snapshotHistory.length>0 && (
-        <s-box padding="base" borderWidth="base" borderRadius="base" marginBlockStart="base">
-          <s-text variant="headingMd" fontWeight="bold">Snapshot History</s-text>
-          <s-table><s-thead><s-tr><s-th>Date</s-th><s-th>GMV</s-th><s-th>Orders</s-th><s-th>AOV</s-th></s-tr></s-thead>
-            <s-tbody>{data.snapshotHistory.slice(0,10).map((s,i) => (
-              <s-tr key={i}><s-td>{s.date}</s-td><s-td>${s.gmv.toLocaleString()}</s-td><s-td>{s.orders}</s-td><s-td>${s.aov.toFixed(0)}</s-td></s-tr>
-            ))}</s-tbody>
-          </s-table>
-        </s-box>
-      )}
-
-      <s-box padding="base" borderWidth="base" borderRadius="base" marginBlockStart="base">
-        <s-text variant="headingMd" fontWeight="bold">Recent Orders</s-text>
-        <s-table><s-thead><s-tr><s-th>Order</s-th><s-th>Date</s-th><s-th>Amount</s-th><s-th>Status</s-th><s-th>Customer</s-th></s-tr></s-thead>
-          <s-tbody>{data.recentOrders.slice(0,10).map((o,i) => (
-            <s-tr key={i}><s-td><s-text fontWeight="bold">{o.name}</s-text></s-td><s-td>{o.date}</s-td><s-td>${o.total.toFixed(2)}</s-td><s-td><s-badge tone={o.status==="PAID"?"success":"attention"}>{o.status}</s-badge></s-td><s-td>{o.customer}</s-td></s-tr>
-          ))}</s-tbody>
-        </s-table>
-      </s-box>
-    </s-page>
+      </BlockStack>
+    </Page>
   );
 }

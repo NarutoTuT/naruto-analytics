@@ -33,14 +33,14 @@ if (host === "localhost") {
 
 export default defineConfig({
   server: {
-    https: devHttps,
+    https: devHttps !== false ? devHttps : undefined,
     allowedHosts: [host],
     cors: { preflightContinue: true },
     port: Number(process.env.PORT || 3000),
     hmr: hmrConfig,
     fs: { allow: ["app", "node_modules"] },
   },
-  plugins: [ reactRouter({ presets: [vercelPreset()] }), tsconfigPaths() ],
+  plugins: [ reactRouter(), tsconfigPaths() ],
   build: { assetsInlineLimit: 0 },
 
   optimizeDeps: { include: ["@shopify/app-bridge-react"] },
