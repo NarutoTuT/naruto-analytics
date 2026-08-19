@@ -1,126 +1,65 @@
- # Naruto-Analytics 完整部署指南 / AI Prompt
- 
- ## 项目信息
- 
- | 项目 | �?|
- |------|-----|
- | 项目�?| naruto-analytics |
- | 本地路径 | `C:\Users\Administrator\Desktop\naruto-analytics` |
- | Vercel 项目 | [naruto-analytics](https://vercel.com/liaoshenyuan1999053s-projects/naruto-analytics) |
- | 生产 URL | https://naruto-analytics.vercel.app |
- | Shopify 组织 | Shenzhen Doogee Hengtong Technology Co., Ltd. |
- | Partners 组织 ID | 4279762 |
- | Dev Dashboard 组织 ID | 113465966 |
- | App ID | 388219633665 |
- | 开发商�?| naruto-analytics-dev.myshopify.com |
- | 正式商店 | 3b1cea-74.myshopify.com (doogeestores) |
- | Neon 数据�?| ep-silent-wind-at5z6dm2 (org-fancy-credit-86149405) |
- 
- ## 关键凭证
- 
- ```env
- SHOPIFY_API_KEY=YOUR_SHOPIFY_API_KEY
- SHOPIFY_API_SECRET=YOUR_SHOPIFY_API_SECRET
- SHOPIFY_APP_URL=https://naruto-analytics.vercel.app
- SCOPES=read_orders,read_customers,read_products,read_analytics,read_inventory,read_locations,read_draft_orders,write_products,write_metaobjects,write_metaobject_definitions
- DATABASE_URL=postgresql://neondb_owner:YOUR_NEON_PASSWORD@ep-silent-wind-at5z6dm2.c-9.us-east-1.aws.neon.tech/neondb?sslmode=require
- ```
- 
- ## 给你�?AI 的完整提�?(Prompt Template)
- 
- 把这个发�?AI（如 ChatGPT/Claude/Codex）即可全自动部署�? 
- ---
- 
- ### 📋 AI Prompt �?一键复�? 
- ```
- 这是一�?Shopify 数据分析 App，名�?Naruto-Analytics�? 请帮我完成以下部署：
- 
- ## 1. 推送到 GitHub
- 运行以下命令（仓�?URL 你自己创建）�? git remote add origin https://github.com/你的用户�?naruto-analytics.git
- git push -u origin main
- 
- ## 2. 部署�?Vercel
- vercel deploy --prod --yes
- 
- ## 3. 设置环境变量
- 以下变量设到 Vercel �?Production 环境�? 
- SHOPIFY_API_KEY = YOUR_SHOPIFY_API_KEY
- SHOPIFY_API_SECRET = YOUR_SHOPIFY_API_SECRET
- SHOPIFY_APP_URL = https://naruto-analytics.vercel.app
- SCOPES = read_orders,read_customers,read_products,read_analytics,read_inventory,read_locations,read_draft_orders,write_products,write_metaobjects,write_metaobject_definitions
- DATABASE_URL = postgresql://neondb_owner:YOUR_NEON_PASSWORD@ep-silent-wind-at5z6dm2.c-9.us-east-1.aws.neon.tech/neondb?sslmode=require
- 
- ## 4. 发布 App 版本
- npx shopify app deploy --version naruto-analytics-prod --message "Production deploy" --allow-updates
- 
- ## 5. 安装到目标商�? 浏览器打开�? https://admin.shopify.com/store/目标商店域名/apps/install?client_id=YOUR_SHOPIFY_API_KEY
- 
- ## 项目关键信息
- - App URL: https://naruto-analytics.vercel.app
- - OAuth 回调: https://naruto-analytics.vercel.app/api/auth/callback
- - 框架: React Router v7 + Vite
- - 数据�? Prisma + PostgreSQL
- - 构建命令: npm run vercel-build (prisma db push && npm run build)
- - 项目路径: <项目路径>
- ```
- 
- ---
- 
- ## 换电脑开发步�? 
- ### 第一步：创建 GitHub 仓库
- �?github.com 创建新仓�?`naruto-analytics`，然后：
- 
- ```powershell
- cd C:\Users\Administrator\Desktop\naruto-analytics
- git remote add origin https://github.com/你的用户�?naruto-analytics.git
- git push -u origin main
- ```
- 
- ### 第二步：新电脑上克隆
- 
- ```powershell
- git clone https://github.com/你的用户�?naruto-analytics.git
- cd naruto-analytics
- npm install
- ```
- 
- ### 第三步：关联 Shopify
- 
- ```powershell
- npx shopify app config link
- # 按提示选择组织 Shenzhen Doogee Hengtong Technology Co., Ltd.
- # �?App Naruto-Analytics
- ```
- 
- ### 第四步：本地开�? 
- ```powershell
- npx shopify app dev --use-localhost
- ```
- 
- ### 第五步：部署更新
- 
- ```powershell
- git add -A && git commit -m "描述"
- vercel deploy --prod --yes
- npx shopify app deploy --version naruto-analytics-新版本号 --message "描述" --allow-updates
- ```
- 
- ## 关键技术细�? 
- ### vite.config.ts
- 使用�?`@vercel/react-router/vite` �?`vercelPreset()` 解决 ESM/CJS 兼容
- 
- ### Shopify API 版本
- 当前使用 `ApiVersion.April26`�?026-04�? 
- ### 常见问题
- 1. GraphQL "syntax error, unexpected end of file" �?检�?`@shopify/shopify-api` �?`@shopify/shopify-app-react-router` 版本兼容�? 2. "Application Error" �?检�?redirect_urls 是否包含 `/auth` 路径
- 3. Vercel 500 错误 �?�?`vercel logs` 查看具体错误
- 
- ### 当前未解决的问题
- - GraphQL 查询返回语法错误，仪表盘数据加载失败
- - 原因�?`@shopify/admin-api-client` �?`generateGetGQLClientParams` 函数可能修改了查询字符串
- - 需要排�?`@shopify/graphql-client` 包的 `request` 方法实现
- 
- ---
- 
- *生成时间: 2026-06-24*
- *Author: Codex AI*
+# Naruto AI 部署指南
+
+Naruto AI 是面向 Shopify 商家的 AI 每日经营简报 App。它不是分析仪表盘；首页在 10 秒内回答：店铺是否健康、今天最应该处理什么。
+
+## 项目信息
+
+- 仓库：`git@github.com:NarutoTuT/naruto-analytics.git`
+- 生产环境：`https://naruto-analytics.vercel.app`
+- 技术栈：React Router v7 + Vite + Shopify Polaris + Prisma + PostgreSQL + Resend
+- 数据库：Neon PostgreSQL
+
+## 环境变量
+
+| 变量 | 说明 |
+| --- | --- |
+| `SHOPIFY_API_KEY` | Shopify 应用 API Key |
+| `SHOPIFY_API_SECRET` | Shopify 应用 API Secret |
+| `SHOPIFY_APP_URL` | App 生产 URL |
+| `SCOPES` | Shopify 权限范围 |
+| `DATABASE_URL` | Neon PostgreSQL 连接串 |
+| `RESEND_API_KEY` | Resend API Key，用于每日邮件 |
+| `EMAIL_FROM` | 邮件发送地址，默认 `onboarding@resend.dev` |
+| `CRON_SECRET` | 保护每日邮件 Cron 端点的密钥 |
+
+真实值只放在 Vercel 和 Shopify Partner Dashboard，不要提交到 GitHub。示例见 `.env.example`。
+
+## 本地开发
+
+1. `git clone git@github.com:NarutoTuT/naruto-analytics.git`
+2. `cd naruto-analytics`
+3. `npm install`
+4. 复制 `.env.example` 为 `.env` 并填写
+5. `npx shopify app dev`
+
+## 部署到 Vercel
+
+1. 推送 `main` 分支；如果 Vercel 已连接 GitHub，会自动部署
+2. 手动部署：`npx vercel deploy --prod --yes`
+3. 在 Vercel Production 环境设置上面的环境变量
+4. 构建命令使用 `npm run vercel-build`（先 `prisma db push`，再构建）
+
+## 每日邮件
+
+- Vercel Cron 配置在 `vercel.json`，每天 07:00 UTC 调用 `/api/cron/daily-brief`
+- 该端点要求 `Authorization: Bearer $CRON_SECRET`；未配置 `CRON_SECRET` 时不会强制校验，启用真实 Cron 前必须配置
+- Resend 域名验证后，把 `EMAIL_FROM` 改为自己的已验证域名
+- `lastDailyAt` 防止同一天重复发送
+
+## 验证数据
+
+- 事件：`app_open`、`view_details`、`feedback`、`email_click`
+- 面试候选接口：`/api/interview-queue`
+- 当前阶段是 10 商家验证冲刺，优先观察回访、邮件打开率、反馈和访谈
+
+## 常见问题
+
+- GraphQL 语法错误：已通过移除 `#graphql` 标签和 `totalCount` 字段修复，并使用 2026-04 API 版本
+- 侧边栏 404：当前只保留 `Today (/app)` 导航
+- 页面空白：检查 `SHOPIFY_API_KEY`、`SHOPIFY_API_SECRET`、`SHOPIFY_APP_URL`、`SCOPES` 和 OAuth 回调配置
+
+## 安全
+
+- 不提交 `.env`、私钥、证书
+- `CRON_SECRET` 不写入前端
+- 所有真实凭证只存 Vercel 和 Shopify Partner Dashboard
