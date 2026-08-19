@@ -1,73 +1,257 @@
-.index {
-  align-items: center;
+.page {
+  min-height: 100vh;
   display: flex;
+  align-items: center;
   justify-content: center;
-  height: 100%;
+  padding: 2rem 1rem;
+  background: #f9fafb;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.container {
+  max-width: 600px;
   width: 100%;
   text-align: center;
-  padding: 1rem;
 }
 
-.heading,
-.text {
-  padding: 0;
-  margin: 0;
+.headline {
+  font-size: 2.5rem;
+  font-weight: 700;
+  line-height: 1.15;
+  color: #111827;
+  margin: 0 0 0.5rem;
 }
 
-.text {
-  font-size: 1.2rem;
-  padding-bottom: 2rem;
+.headlineAccent {
+  color: #008060;
 }
 
-.content {
+.subtext {
+  font-size: 1.1rem;
+  line-height: 1.5;
+  color: #6b7280;
+  margin: 0 0 2rem;
+  max-width: 480px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* Preview card */
+.preview {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 24px;
+  text-align: left;
+  margin-bottom: 2.5rem;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+}
+
+.previewStatus {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: #111827;
+  margin-bottom: 16px;
+}
+
+.greenDot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #008060;
+  flex-shrink: 0;
+}
+
+.previewMetrics {
   display: grid;
-  gap: 2rem;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0;
+  border: 1px solid #f0f0f0;
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+
+.metric {
+  padding: 14px 10px;
+  text-align: center;
+  border-right: 1px solid #f0f0f0;
+}
+
+.metric:last-child {
+  border-right: none;
+}
+
+.metricLabel {
+  font-size: 0.8rem;
+  color: #6b7280;
+  margin-bottom: 4px;
+}
+
+.metricValue {
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: #111827;
+}
+
+.metricTrendUp {
+  font-size: 0.8rem;
+  color: #059669;
+  margin-top: 2px;
+}
+
+.metricTrendDown {
+  font-size: 0.8rem;
+  color: #dc2626;
+  margin-top: 2px;
+}
+
+.previewAction {
+  background: #f0fdf4;
+  border-radius: 8px;
+  padding: 12px 16px;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: #374151;
+}
+
+.previewActionLabel {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #6b7280;
+  margin-bottom: 2px;
+}
+
+/* Benefits */
+.benefits {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.5rem;
+  margin-bottom: 2.5rem;
+}
+
+.benefit {
+  text-align: center;
+}
+
+.benefitIcon {
+  font-size: 1.5rem;
+  margin-bottom: 8px;
+}
+
+.benefitTitle {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #111827;
+  margin-bottom: 4px;
+}
+
+.benefitDesc {
+  font-size: 0.85rem;
+  line-height: 1.4;
+  color: #6b7280;
+}
+
+/* CTA Section */
+.ctaSection {
+  margin-bottom: 1rem;
 }
 
 .form {
   display: flex;
-  align-items: center;
-  justify-content: flex-start;
+  gap: 0.5rem;
+  justify-content: center;
+  max-width: 480px;
   margin: 0 auto;
-  gap: 1rem;
-}
-
-.label {
-  display: grid;
-  gap: 0.2rem;
-  max-width: 20rem;
-  text-align: left;
-  font-size: 1rem;
 }
 
 .input {
-  padding: 0.4rem;
+  flex: 1;
+  padding: 0.75rem 1rem;
+  font-size: 0.95rem;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  outline: none;
+  transition: border-color 0.15s;
+  min-width: 0;
+}
+
+.input:focus {
+  border-color: #008060;
+  box-shadow: 0 0 0 2px rgba(0, 128, 96, 0.1);
 }
 
 .button {
-  padding: 0.4rem;
+  padding: 0.75rem 1.5rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #ffffff;
+  background: #1e3a8a;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s;
 }
 
-.list {
-  list-style: none;
-  padding: 0;
-  padding-top: 3rem;
-  margin: 0;
-  display: flex;
-  gap: 2rem;
+.button:hover {
+  background: #1e40af;
 }
 
-.list > li {
-  max-width: 20rem;
-  text-align: left;
+.button:active {
+  background: #1e3a8a;
 }
 
-@media only screen and (max-width: 50rem) {
-  .list {
-    display: block;
+.trustLine {
+  font-size: 0.8rem;
+  color: #9ca3af;
+  margin: 0.75rem 0 0;
+}
+
+/* Responsive */
+@media only screen and (max-width: 640px) {
+  .headline {
+    font-size: 1.8rem;
   }
 
-  .list > li {
-    padding-bottom: 1rem;
+  .subtext {
+    font-size: 1rem;
+  }
+
+  .preview {
+    padding: 16px;
+  }
+
+  .previewMetrics {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0;
+  }
+
+  .metric {
+    padding: 10px 6px;
+  }
+
+  .metricValue {
+    font-size: 1.1rem;
+  }
+
+  .benefits {
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+  }
+
+  .form {
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .input {
+    width: 100%;
+  }
+
+  .button {
+    width: 100%;
   }
 }

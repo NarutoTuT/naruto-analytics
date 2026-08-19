@@ -1,0 +1,98 @@
+{
+  "status": {
+    "allClear": "早上好。您的店铺今天运行正常。",
+    "needsAttention": "今天有件事可能需要您留意一下。",
+    "actionRequired": "今天有件事需要您关注。潜在影响：{{impact}}。"
+  },
+  "allClear": {
+    "heading": "早上好。您的店铺今天运行正常。",
+    "detail": "昨日营收 {{revenue}}，共 {{orders}} ——与近期表现一致。",
+    "customers": "现有 {{customers}}（近一个月新增 {{newCount}} 位）。{{repeatCount}}",
+    "startDay": "开始今日工作",
+    "seeDetails": "查看详情"
+  },
+  "decision": {
+    "focusBadge": {
+      "high": "今日关注",
+      "medium": "值得留意",
+      "low": "仅供参考"
+    },
+    "yourMove": "建议操作",
+    "seeBehind": "了解原因",
+    "hideNumbers": "收起数据",
+    "iveGotThis": "我已了解"
+  },
+  "button": {
+    "update": "更新",
+    "updating": "更新中…",
+    "tryAgain": "重试",
+    "connectStore": "连接店铺",
+    "carryOn": "继续工作",
+    "seeNumbers": "查看数据详情",
+    "viewDetails": "查看详情",
+    "markReviewed": "标记已处理"
+  },
+  "metrics": {
+    "revenue": "营收",
+    "orders": "订单数",
+    "averageOrder": "平均客单价"
+  },
+  "details": {
+    "forYourAwareness": "供您参考",
+    "revenueTrend": "营收趋势与热销产品",
+    "product": "产品",
+    "revenue": "营收",
+    "viewSupportingDetails": "查看支持数据",
+    "hideSupportingDetails": "收起支持数据"
+  },
+  "page": {
+    "title": "今日简报",
+    "loading": "请稍候——正在为您整理今日简报。",
+    "welcomeHeading": "欢迎使用每日经营简报",
+    "welcomeDescription": "连接您的店铺，即可开始接收个性化的每日经营简报。"
+  },
+  "error": {
+    "title": "暂时无法为您准备简报",
+    "description": "别担心——我们稍后会重试，您也可以手动刷新。"
+  },
+  "issues": {
+    "low_repurchase_rate": {
+      "title": "复购率低于目标值",
+      "detail": "只有 {{repRate}}% 的客户再次下单（目标值：{{target}}%）。现有客户的复购潜力尚未充分挖掘。",
+      "action": "建议针对 60 天内未复购的客户发起召回邮件活动。"
+    },
+    "revenue_concentration": {
+      "title": "产品营收集中度风险",
+      "detail": "您的前 3 款产品贡献了 {{pct}}% 的营收。若某一供应链出现问题，将对业务产生显著影响。",
+      "action": "建议检查热销产品库存，并立即开始推广次级产品。"
+    },
+    "high_aov": {
+      "title": "客单价高于基线",
+      "detail": "当前客单价为 ${{aov}}，表明客户消费意愿良好。这对您的业务来说是一个积极信号。",
+      "action": "建议测试 $299 的免运费门槛，进一步提升客单价。"
+    }
+  },
+  "trend": {
+    "up": "↑{{change}}%",
+    "down": "↓{{change}}%"
+  },
+  "nav": {
+    "today": "今日"
+  },
+  "email": {
+    "title": "每日邮件简报",
+    "active": "已开启",
+    "paused": "已暂停",
+    "emailLabel": "邮箱地址",
+    "placeholder": "输入邮箱地址",
+    "enableBtn": "开启每日简报",
+    "disableBtn": "关闭每日简报",
+    "saveBtn": "保存设置",
+    "testBtn": "发送测试邮件",
+    "savedMsg": "邮件偏好已保存。",
+    "testSentMsg": "测试邮件已发送！",
+    "saveError": "保存失败",
+    "testError": "发送失败",
+    "networkError": "网络错误"
+  }
+}

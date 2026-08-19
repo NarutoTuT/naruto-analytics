@@ -1,0 +1,98 @@
+{
+  "status": {
+    "allClear": "Good morning. Your store is running smoothly.",
+    "needsAttention": "There's something you may want to look at today.",
+    "actionRequired": "One item needs your attention today. Potential impact: {{impact}}."
+  },
+  "allClear": {
+    "heading": "Good morning. Your store is running smoothly.",
+    "detail": "Yesterday brought in {{revenue}} from {{orders}} — consistent with your recent performance.",
+    "customers": "You have {{customers}} ({{newCount}} new in the last month). {{repeatCount}}",
+    "startDay": "Start your day",
+    "seeDetails": "See the details"
+  },
+  "decision": {
+    "focusBadge": {
+      "high": "Today's focus",
+      "medium": "Worth a look",
+      "low": "Just so you know"
+    },
+    "yourMove": "Your move",
+    "seeBehind": "See what's behind this",
+    "hideNumbers": "Hide the numbers",
+    "iveGotThis": "I've got this"
+  },
+  "button": {
+    "update": "Update",
+    "updating": "Updating…",
+    "tryAgain": "Try again",
+    "connectStore": "Connect my store",
+    "carryOn": "Carry on",
+    "seeNumbers": "See the numbers behind this",
+    "viewDetails": "View details",
+    "markReviewed": "Mark as reviewed"
+  },
+  "metrics": {
+    "revenue": "Revenue",
+    "orders": "Orders",
+    "averageOrder": "Average order"
+  },
+  "details": {
+    "forYourAwareness": "For your awareness",
+    "revenueTrend": "Revenue trend & top products",
+    "product": "Product",
+    "revenue": "Revenue",
+    "viewSupportingDetails": "View supporting details",
+    "hideSupportingDetails": "Hide supporting details"
+  },
+  "page": {
+    "title": "Today's Overview",
+    "loading": "Just a moment — pulling together today's overview.",
+    "welcomeHeading": "Welcome to your daily business overview",
+    "welcomeDescription": "Connect your store to start receiving personalized daily briefings about your business."
+  },
+  "error": {
+    "title": "We weren't able to prepare your overview right now",
+    "description": "Don't worry — we'll try again shortly. You can also sync manually."
+  },
+  "issues": {
+    "low_repurchase_rate": {
+      "title": "Repeat purchase rate below target",
+      "detail": "Only {{repRate}}% of customers have re-ordered (target: {{target}}%). You're leaving revenue on the table from existing customers.",
+      "action": "Prepare a win-back email campaign targeting customers who haven't re-ordered in 60 days."
+    },
+    "revenue_concentration": {
+      "title": "Product concentration risk",
+      "detail": "Your top 3 products generated {{pct}}% of revenue. If one supplier fails, your business could be significantly impacted.",
+      "action": "Review inventory for top products and start promoting secondary products this week."
+    },
+    "high_aov": {
+      "title": "AOV above baseline",
+      "detail": "Your AOV of ${{aov}} indicates healthy spending. This is a positive signal for your business.",
+      "action": "Consider testing a $299 free shipping threshold to further increase average order value."
+    }
+  },
+  "trend": {
+    "up": "↑{{change}}%",
+    "down": "↓{{change}}%"
+  },
+  "nav": {
+    "today": "Today"
+  },
+  "email": {
+    "title": "Daily Email Brief",
+    "active": "Active",
+    "paused": "Paused",
+    "emailLabel": "Email address",
+    "placeholder": "merchant@example.com",
+    "enableBtn": "Enable daily brief",
+    "disableBtn": "Disable daily brief",
+    "saveBtn": "Save preferences",
+    "testBtn": "Send test email",
+    "savedMsg": "Email preferences saved.",
+    "testSentMsg": "Test email sent!",
+    "saveError": "Failed to save",
+    "testError": "Failed to send",
+    "networkError": "Network error"
+  }
+}

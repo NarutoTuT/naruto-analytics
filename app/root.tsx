@@ -1,6 +1,8 @@
 import { Links, Meta, Outlet, Scripts, ScrollRestoration } from "react-router";
 import { AppProvider } from "@shopify/shopify-app-react-router/react";
 import type { LinksFunction } from "react-router";
+import { I18nextProvider } from "react-i18next";
+import i18n from "./i18n/config";
 import polarisStyles from "@shopify/polaris/build/esm/styles.css?url";
 
 export const links: LinksFunction = () => [
@@ -9,7 +11,7 @@ export const links: LinksFunction = () => [
 
 export default function App() {
   return (
-    <html lang="en">
+    <html lang={i18n.language}>
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width,initial-scale=1" />
@@ -23,9 +25,11 @@ export default function App() {
         <Links />
       </head>
       <body>
-        <AppProvider>
-          <Outlet />
-        </AppProvider>
+        <I18nextProvider i18n={i18n}>
+          <AppProvider>
+            <Outlet />
+          </AppProvider>
+        </I18nextProvider>
         <ScrollRestoration />
         <Scripts />
       </body>

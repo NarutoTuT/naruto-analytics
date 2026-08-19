@@ -119,3 +119,25 @@ model AnalyticsReport {
 
   @@index([shopId, reportType, periodStart])
 }
+
+model NotificationPreference {
+  id           Int      @id @default(autoincrement())
+  shopId       String   @unique
+  email        String
+  dailyBrief   Boolean  @default(true)
+  deliveryTime String   @default("08:00")
+  timezone     String   @default("UTC")
+  lastDailyAt  DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model AnalyticsEvent {
+  id        Int      @id @default(autoincrement())
+  shopId    String
+  event     String
+  data      String?
+  createdAt DateTime @default(now())
+
+  @@index([shopId, event, createdAt])
+}

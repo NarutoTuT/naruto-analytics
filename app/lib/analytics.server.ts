@@ -42,13 +42,22 @@ export interface TrendData {
   direction: "up" | "down" | "flat";
 }
 
+export interface IssueData {
+  repRate?: number;
+  top3Pct?: number;
+  aov?: number;
+  targetRepRate?: number;
+}
+
 export interface PrioritizedIssue {
   type: "problem" | "insight";
+  issueType: "low_repurchase_rate" | "revenue_concentration" | "high_aov";
   title: string;
   detail: string;
   action: string;
   priority: "high" | "medium" | "low";
   revenueImpact: number;
+  issueData?: IssueData;
 }
 
 export interface AnalyticsData {
@@ -82,29 +91,35 @@ function scoreIssues(data: AnalyticsData, totalGMV: number): PrioritizedIssue[] 
 
   if (repRate < 25) {
     issues.push({
-      type: "problem", title: "Repeat purchase rate below target",
+      type: "problem", issueType: "low_repurchase_rate",
+      title: "Repeat purchase rate below target",
       detail: `Only ${repRate}% of customers have re-ordered (target: 25%). You're leaving revenue on the table from existing customers.`,
       action: "Prepare a win-back email campaign targeting customers who haven't re-ordered in 60 days.",
       priority: repRate < 5 ? "high" : "medium",
-      revenueImpact: Math.round(data.totalCustomers * data.aov * (25 - repRate) / 100 * 0.05)
+      revenueImpact: Math.round(data.totalCustomers * data.aov * (25 - repRate) / 100 * 0.05),
+      issueData: { repRate, targetRepRate: 25 }
     });
   }
   if (top3Pct > 50) {
     issues.push({
-      type: "problem", title: "Product concentration risk",
+      type: "problem", issueType: "revenue_concentration",
+      title: "Product concentration risk",
       detail: `Your top 3 products generated ${top3Pct}% of revenue. If one supplier fails, your business could be significantly impacted.`,
       action: "Review inventory for top products and start promoting secondary products this week.",
       priority: top3Pct > 70 ? "high" : "medium",
-      revenueImpact: Math.round(totalGMV * top3Pct / 100 * 0.1)
+      revenueImpact: Math.round(totalGMV * top3Pct / 100 * 0.1),
+      issueData: { top3Pct }
     });
   }
   if (data.aov > 0) {
     issues.push({
-      type: "insight", title: "AOV above baseline",
+      type: "insight", issueType: "high_aov",
+      title: "AOV above baseline",
       detail: `Your AOV of $${Math.round(data.aov)} indicates healthy spending. This is a positive signal for your business.`,
       action: "Consider testing a $299 free shipping threshold to further increase average order value.",
       priority: "low",
-      revenueImpact: 0
+      revenueImpact: 0,
+      issueData: { aov: Math.round(data.aov) }
     });
   }
   return issues.sort((a, b) => {

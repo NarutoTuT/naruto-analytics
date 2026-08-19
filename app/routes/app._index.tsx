@@ -1,13 +1,14 @@
 import type { LoaderFunctionArgs } from "react-router";
 import { useLoaderData, useFetcher, data } from "react-router";
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { authenticate } from "../shopify.server";
 import { fetchAndComputeAnalytics, getSnapshotHistory } from "../lib/analytics.server";
 import prisma from "../db.server";
 import type { AnalyticsData, PrioritizedIssue, TrendData } from "../lib/analytics.server";
 import {
   Card, Text, BlockStack, InlineStack, Badge, Banner, Button,
-  SkeletonBodyText, EmptyState, Page, Collapsible
+  SkeletonBodyText, EmptyState, Page, Collapsible, TextField
 } from "@shopify/polaris";
 import { RefreshIcon } from "@shopify/polaris-icons";
 
@@ -168,6 +169,7 @@ function EmptyStateView() {
 }
 
 export default function Dashboard() {
+  const { t } = useTranslation();
   const fetcher = useFetcher();
   const [syncing, setSyncing] = useState(false);
   const [loaded, setLoaded] = useState(false);
@@ -201,12 +203,113 @@ export default function Dashboard() {
     fetcher.submit({ action: "sync" }, { method: "POST", encType: "application/json" });
   };
 
-  const toggleDetails = () => setDetailsOpen(!detailsOpen);
+  const toggleDetails = () => {
+    const opening = !detailsOpen;
+    if (opening) {
+      setFeedbackShown(true);
+      fetch("/api/track", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ event: "view_details" }),
+      });
+    }
+    setDetailsOpen(opening);
+  };
 
   const handleMarkReviewed = () => {
     if (topIssue) {
       setReviewedTitles(prev => new Set(prev).add(topIssue.title));
     }
+  };
+
+  // Email preferences state
+  const [prefLoaded, setPrefLoaded] = useState(false);
+  const [prefEmail, setPrefEmail] = useState("");
+  const [prefDailyBrief, setPrefDailyBrief] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [testSending, setTestSending] = useState(false);
+  const [prefMessage, setPrefMessage] = useState("");
+  const [prefMessageType, setPrefMessageType] = useState<"success" | "critical">("success");
+
+  useEffect(() => {
+    fetch("/api/preferences")
+      .then(r => r.json())
+      .then(d => {
+        setPrefEmail(d.shopEmail || "");
+        setPrefDailyBrief(d.preferences?.dailyBrief !== false);
+        setPrefLoaded(true);
+      })
+      .catch(() => setPrefLoaded(true));
+  }, []);
+
+  const handleSavePreferences = async () => {
+    setSaving(true);
+    setPrefMessage("");
+    try {
+      const r = await fetch("/api/preferences", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: prefEmail, dailyBrief: prefDailyBrief }),
+      });
+      const d = await r.json();
+      setPrefMessage(d.success ? t("email.savedMsg") : d.error || t("email.saveError"));
+      setPrefMessageType(d.success ? "success" : "critical");
+    } catch {
+      setPrefMessage(t("email.networkError"));
+      setPrefMessageType("critical");
+    }
+    setSaving(false);
+  };
+
+  const handleTestEmail = async () => {
+    setTestSending(true);
+    setPrefMessage("");
+    try {
+      const r = await fetch("/api/test-email", { method: "POST" });
+      const d = await r.json();
+      setPrefMessage(d.success ? t("email.testSentMsg") : d.error || t("email.testError"));
+      setPrefMessageType(d.success ? "success" : "critical");
+    } catch {
+      setPrefMessage(t("email.networkError"));
+      setPrefMessageType("critical");
+    }
+    setTestSending(false);
+  };
+
+  // Session tracking
+  const sessionTracked = useRef(false);
+  const [feedbackShown, setFeedbackShown] = useState(false);
+  const [feedbackDone, setFeedbackDone] = useState(false);
+
+  useEffect(() => {
+    if (sessionTracked.current) return;
+    sessionTracked.current = true;
+    fetch("/api/track", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        event: "app_open",
+        data: { language: document.documentElement.lang || "en", source: "direct" },
+      }),
+    });
+  }, []);
+
+  // Show feedback after 15 seconds
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (!feedbackDone) setFeedbackShown(true);
+    }, 15000);
+    return () => clearTimeout(timer);
+  }, [feedbackDone]);
+
+  const handleFeedback = async (useful: boolean) => {
+    setFeedbackShown(false);
+    setFeedbackDone(true);
+    await fetch("/api/track", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ event: "feedback", data: { useful } }),
+    });
   };
 
   if (hasError) {
@@ -359,6 +462,62 @@ export default function Dashboard() {
           </BlockStack>
           </div>
         </Collapsible>
+
+        {/* Feedback */}
+        {feedbackShown && !feedbackDone && (
+          <Card padding="200">
+            <BlockStack gap="150">
+              <InlineStack gap="200" align="center" blockAlign="center">
+                <Text as="span" variant="bodyMd">Was today’s brief useful?</Text>
+                <Button size="slim" onClick={() => handleFeedback(true)}>
+                  👍 Useful
+                </Button>
+                <Button size="slim" onClick={() => handleFeedback(false)}>
+                  👎 Not useful
+                </Button>
+              </InlineStack>
+            </BlockStack>
+          </Card>
+        )}
+
+        {/* Email Brief Setup */}
+        {prefLoaded && (
+          <Card padding="300">
+            <BlockStack gap="200">
+              <InlineStack gap="200" align="space-between">
+                <Text as="h3" variant="headingSm" fontWeight="semibold">{t("email.title")}</Text>
+                <Badge tone={prefDailyBrief ? "success" : "attention"}>
+                  {prefDailyBrief ? t("email.active") : t("email.paused")}
+                </Badge>
+              </InlineStack>
+              <TextField
+                label={t("email.emailLabel")}
+                value={prefEmail}
+                onChange={setPrefEmail}
+                placeholder={t("email.placeholder")}
+                autoComplete="email"
+              />
+              <InlineStack gap="200">
+                <Button onClick={() => setPrefDailyBrief(!prefDailyBrief)}>
+                  {prefDailyBrief ? t("email.disableBtn") : t("email.enableBtn")}
+                </Button>
+              </InlineStack>
+              <InlineStack gap="200">
+                <Button variant="primary" onClick={handleSavePreferences} loading={saving}>
+                  {t("email.saveBtn")}
+                </Button>
+                <Button onClick={handleTestEmail} loading={testSending}>
+                  {t("email.testBtn")}
+                </Button>
+              </InlineStack>
+              {prefMessage && (
+                <Text as="p" variant="bodySm" tone={prefMessageType}>
+                  {prefMessage}
+                </Text>
+              )}
+            </BlockStack>
+          </Card>
+        )}
 
       </BlockStack>
     </Page>
