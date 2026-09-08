@@ -1,49 +1,24 @@
-import { AppProvider } from "@shopify/shopify-app-react-router/react";
-import { useState } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
-import { Form, useActionData, useLoaderData } from "react-router";
-
 import { login } from "../../shopify.server";
-import { loginErrorMessage } from "./error.server";
 
+// Shopify-initiated authentication still delegates to the official SDK.
+// A missing shop context must not prompt merchants to type a store domain.
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const errors = loginErrorMessage(await login(request));
-
-  return { errors };
+  if (new URL(request.url).searchParams.get("shop")) await login(request);
+  return null;
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-  const errors = loginErrorMessage(await login(request));
-
-  return {
-    errors,
-  };
+  await login(request);
+  return null;
 };
 
 export default function Auth() {
-  const loaderData = useLoaderData<typeof loader>();
-  const actionData = useActionData<typeof action>();
-  const [shop, setShop] = useState("");
-  const { errors } = actionData || loaderData;
-
   return (
-    <AppProvider embedded={false}>
-      <s-page>
-        <Form method="post">
-        <s-section heading="Log in">
-          <s-text-field
-            name="shop"
-            label="Shop domain"
-            details="example.myshopify.com"
-            value={shop}
-            onChange={(e) => setShop(e.currentTarget.value)}
-            autocomplete="on"
-            error={errors.shop}
-          ></s-text-field>
-          <s-button type="submit">Log in</s-button>
-        </s-section>
-        </Form>
-      </s-page>
-    </AppProvider>
+    <main style={{ maxWidth: 640, margin: "48px auto", padding: 24 }}>
+      <h1>Open Naruto Analytics from Shopify</h1>
+      <p>Open Apps in your Shopify admin, then select Naruto Analytics to sign in.</p>
+      <a href="https://admin.shopify.com/">Open Shopify admin</a>
+    </main>
   );
 }

@@ -1,5 +1,4 @@
 import { Links, Meta, Outlet, Scripts, ScrollRestoration } from "react-router";
-import { AppProvider } from "@shopify/shopify-app-react-router/react";
 import type { LinksFunction } from "react-router";
 import { I18nextProvider } from "react-i18next";
 import i18n from "./i18n/config";
@@ -26,9 +25,7 @@ export default function App() {
       </head>
       <body>
         <I18nextProvider i18n={i18n}>
-          <AppProvider>
-            <Outlet />
-          </AppProvider>
+          <Outlet />
         </I18nextProvider>
         <ScrollRestoration />
         <Scripts />

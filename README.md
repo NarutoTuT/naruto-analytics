@@ -2,11 +2,11 @@
 
 Naruto AI is a Shopify embedded app that gives merchants a daily operating brief. It answers three questions every morning: Is my store healthy? What changed? What should I do first?
 
-This is not an analytics dashboard. The home page is a 10-second Daily Decision View: status first, one top priority, one recommended action, with supporting data collapsed behind details.
+This is not an analytics dashboard. The home page is a 10-second Daily Decision View: explicit reporting period, one top priority, one recommended action, with supporting data collapsed behind details.
 
 ## Features
 
-- Today Decision View with health status, priority issue, estimated revenue impact, recommended action, and collapsed supporting data
+- Today Decision View with review signals, priority issue, recommended action, and collapsed supporting data
 - Daily Email Brief via Resend with daily preferences and test send
 - Validation tracking: `app_open`, `view_details`, `feedback`, `email_click`
 - Interview queue endpoint for finding merchants worth contacting
@@ -48,7 +48,7 @@ Never commit real values. Keep production secrets in Vercel and the Shopify Part
 
 ## Deployment
 
-Vercel deployment uses `npm run vercel-build`, which runs `prisma db push` before the app build. The cron job in `vercel.json` calls `/api/cron/daily-brief` daily at 07:00 UTC and should be protected with `CRON_SECRET`.
+Vercel deployment uses `npm run vercel-build` without changing the database. Apply the reviewed migrations separately; existing databases must first be checked and baselined. The cron runs every five minutes, requires `CRON_SECRET`, honors local delivery preferences and checks active subscriptions. See [paid launch runbook](docs/APP_STORE_LAUNCH.md) for required Partner configuration, migrations and outstanding acceptance checks.
 
 ## Validation Events
 

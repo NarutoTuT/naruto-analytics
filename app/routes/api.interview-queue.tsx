@@ -1,8 +1,10 @@
 import type { LoaderFunctionArgs } from "react-router";
 import { data } from "react-router";
+import { requireInternal } from "../lib/internal-auth.server";
 import prisma from "../db.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
+  requireInternal(request, "INTERNAL_ADMIN_SECRET");
   // Fetch all relevant events
   const events = await prisma.analyticsEvent.findMany({
     where: { event: { in: ["app_open", "feedback"] } },
@@ -10,7 +12,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   });
 
   // Group by shop and compute metrics
-  const shopMap = new Map<string, { visitDays: Set<string>; useful: boolean }>();
+  const shopMap = new Map<
+    string,
+    { visitDays: Set<string>; useful: boolean }
+  >();
 
   for (const e of events) {
     if (!shopMap.has(e.shopId)) {
@@ -24,13 +29,15 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       try {
         const d = JSON.parse(e.data);
         if (d.useful) s.useful = true;
-      } catch { /* ignore malformed data */ }
+      } catch {
+        /* ignore malformed data */
+      }
     }
   }
 
   // Filter: >= 5 visit days + at least one useful feedback
   const candidates = Array.from(shopMap.entries())
-    .filter(([_, s]) => s.visitDays.size >= 5 && s.useful)
+    .filter(([, s]) => s.visitDays.size >= 5 && s.useful)
     .map(([shopId, s]) => ({
       shopId,
       visitDays: s.visitDays.size,
@@ -47,7 +54,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         shopEmail: shop?.email || null,
         shopDomain: shop?.myshopifyDomain || null,
       };
-    })
+    }),
   );
 
   return data({

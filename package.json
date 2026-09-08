@@ -19,7 +19,8 @@
     "vite": "vite",
     "typecheck": "react-router typegen && tsc --noEmit",
     "postinstall": "prisma generate",
-    "vercel-build": "prisma db push && npm run build"
+    "vercel-build": "npm run build",
+    "test": "node scripts/test.mjs"
   },
   "type": "module",
   "engines": {

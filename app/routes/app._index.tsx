@@ -1,525 +1,353 @@
-import type { LoaderFunctionArgs } from "react-router";
-import { useLoaderData, useFetcher, data } from "react-router";
-import { useEffect, useState, useMemo, useRef } from "react";
+import type { LoaderFunctionArgs, ActionFunctionArgs } from "react-router";
+import { useLoaderData, useFetcher, useRouteError } from "react-router";
+import { boundary } from "@shopify/shopify-app-react-router/server";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { authenticate } from "../shopify.server";
-import { fetchAndComputeAnalytics, getSnapshotHistory } from "../lib/analytics.server";
-import prisma from "../db.server";
-import type { AnalyticsData, PrioritizedIssue, TrendData } from "../lib/analytics.server";
 import {
-  Card, Text, BlockStack, InlineStack, Badge, Banner, Button,
-  SkeletonBodyText, EmptyState, Page, Collapsible, TextField
+  Page,
+  Card,
+  BlockStack,
+  InlineStack,
+  Text,
+  Button,
+  Collapsible,
+  TextField,
+  Checkbox,
+  Banner,
 } from "@shopify/polaris";
-import { RefreshIcon } from "@shopify/polaris-icons";
-
-export const loader = async ({ request }: LoaderFunctionArgs) => {
-  try {
-    const { admin, session } = await authenticate.admin(request);
-    let shopRecord = await prisma.shop.findUnique({ where: { myshopifyDomain: session.shop } });
-    if (!shopRecord) {
-      const r = await admin.graphql("query { shop { id name email myshopifyDomain createdAt } }");
-      const j = await r.json();
-      const s = j.data.shop;
-      shopRecord = await prisma.shop.create({ data: { id: s.id, myshopifyDomain: s.myshopifyDomain, name: s.name, email: s.email, createdAt: new Date(s.createdAt) } });
-    }
-    const analyticsData = await fetchAndComputeAnalytics(admin);
-    analyticsData.snapshotHistory = await getSnapshotHistory(shopRecord.id);
-    return data(analyticsData);
-  } catch (err) {
-    console.error("Loader error:", err);
-    return data({ error: err instanceof Error ? err.message : "Unknown error" }, { status: 500 });
-  }
-};
-
-function formatCurrency(amount: number): string {
-  return "$" + amount.toLocaleString();
-}
-
-function TrendBadge({ trend }: { trend: TrendData }) {
-  if (trend.direction === "flat") return null;
-  const isUp = trend.direction === "up";
-  return (
-    <Text as="span" variant="bodyXs" tone={isUp ? "success" : "critical"}>
-      {isUp ? "\u2191" : "\u2193"}{trend.change}%
-    </Text>
-  );
-}
-
-function FocusBadge({ priority }: { priority: "high" | "medium" | "low" }) {
-  const tone = priority === "high" ? "critical" : priority === "medium" ? "attention" : "success";
-  const label = priority === "high" ? "Today\u2019s focus" : priority === "medium" ? "Worth a look" : "Just so you know";
-  return <Badge tone={tone}>{label}</Badge>;
-}
-
-function MetricsSection({ data: d }: { data: AnalyticsData }) {
-  const metrics = [
-    { label: "Revenue", value: formatCurrency(d.gmv), trend: d.trends.gmv },
-    { label: "Orders", value: d.totalOrders.toString(), trend: d.trends.orders },
-    { label: "Average order", value: formatCurrency(d.aov), trend: d.trends.aov },
-  ];
-  return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "12px" }}>
-      {metrics.map(m => (
-        <Card key={m.label} padding="300">
-          <BlockStack gap="100">
-            <Text as="span" variant="bodyXs" tone="subdued">{m.label}</Text>
-            <Text as="span" variant="headingXl" fontWeight="bold">{m.value}</Text>
-            {m.trend && <TrendBadge trend={m.trend} />}
-          </BlockStack>
-        </Card>
-      ))}
-    </div>
-  );
-}
-
-function SignalCard({ issue }: { issue: PrioritizedIssue }) {
-  const dotColor = issue.priority === "medium" ? "#B98900" : "#008060";
-  return (
-    <div style={{ border: "1px solid #E1E3E5", borderRadius: "8px", padding: "14px 16px", marginBottom: "8px" }}>
-      <BlockStack gap="100">
-        <InlineStack gap="200" align="start">
-          <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: dotColor, marginTop: "6px", flexShrink: 0 }} />
-          <BlockStack gap="050">
-            <Text as="span" variant="bodySm" fontWeight="semibold">{issue.title}</Text>
-            <Text as="span" variant="bodySm" tone="subdued">{issue.detail}</Text>
-          </BlockStack>
-        </InlineStack>
-        <div style={{ paddingLeft: "16px" }}>
-          <Text as="span" variant="bodyXs" tone="success">{issue.action}</Text>
-        </div>
-      </BlockStack>
-    </div>
-  );
-}
-
-function SupportingData({ data: d }: { data: AnalyticsData }) {
-  if (d.topSkuRevenue.length === 0) return null;
-  const top3 = d.topSkuRevenue.slice(0, 3);
-  return (
-    <Card padding="300">
-      <BlockStack gap="200">
-        <Text as="p" variant="bodySm" fontWeight="semibold" tone="subdued">Revenue trend & top products</Text>
-        <div style={{ display: "flex", gap: "4px", height: "48px", alignItems: "flex-end" }}>
-          {d.dailyGmv.slice(-7).map((day, i) => (
-            <div key={i} style={{
-              flex: 1, borderRadius: "2px 2px 0 0", minHeight: "4px",
-              height: Math.max((day.gmv / Math.max(...d.dailyGmv.slice(-7).map(x => x.gmv), 1)) * 48, 4),
-              background: "#5C6AC4", opacity: 0.7
-            }} />
-          ))}
-        </div>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
-          <thead>
-            <tr>
-              <th style={{ textAlign: "left", padding: "8px 12px", fontWeight: 600, color: "#6D7175", fontSize: "12px", borderBottom: "1px solid #F1F2F3" }}>Product</th>
-              <th style={{ textAlign: "right", padding: "8px 12px", fontWeight: 600, color: "#6D7175", fontSize: "12px", borderBottom: "1px solid #F1F2F3" }}>Revenue</th>
-            </tr>
-          </thead>
-          <tbody>
-            {top3.map((sku, i) => (
-              <tr key={i}>
-                <td style={{ padding: "8px 12px", borderBottom: "1px solid #F1F2F3" }}>{sku.name.length > 30 ? sku.name.slice(0, 30) + "\u2026" : sku.name}</td>
-                <td style={{ padding: "8px 12px", borderBottom: "1px solid #F1F2F3", textAlign: "right", fontWeight: 600 }}>{formatCurrency(sku.revenue)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </BlockStack>
-    </Card>
-  );
-}
-
-function LoadingSkeleton() {
-  return (
-    <Page title="Today\u2019s Overview">
-      <BlockStack gap="300">
-        <Text as="p" variant="bodyMd" tone="subdued">Just a moment \u2014 pulling together today\u2019s overview.</Text>
-        <div style={{ background: "#F6F6F7", borderRadius: "10px", padding: "20px" }}>
-          <SkeletonBodyText lines={2} />
-        </div>
-        <SkeletonBodyText lines={4} />
-      </BlockStack>
-    </Page>
-  );
-}
-
-function ErrorState({ message }: { message: string }) {
-  return (
-    <Page title="Today\u2019s Overview">
-      <Banner title="We weren\u2019t able to prepare your overview right now" tone="critical">
-        <p>Don\u2019t worry \u2014 we\u2019ll try again shortly. You can also sync manually.</p>
-        <Button variant="primary" onClick={() => window.location.reload()}>Try again</Button>
-      </Banner>
-    </Page>
-  );
-}
-
-function EmptyStateView() {
-  return (
-    <Page title="Today\u2019s Overview">
-      <EmptyState
-        heading="Welcome to your daily business overview"
-        action={{ content: "Connect my store", onAction: () => {} }}
-        image={""}
-      >
-        <p>Connect your store to start receiving personalized daily briefings about your business.</p>
-      </EmptyState>
-    </Page>
-  );
-}
-
-export default function Dashboard() {
-  const { t } = useTranslation();
-  const fetcher = useFetcher();
-  const [syncing, setSyncing] = useState(false);
-  const [loaded, setLoaded] = useState(false);
-  const [hasError, setHasError] = useState(false);
-  const [errorMsg, setErrorMsg] = useState("");
-  const [detailsOpen, setDetailsOpen] = useState(false);
-  const [reviewedTitles, setReviewedTitles] = useState<Set<string>>(new Set());
-
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const loaderData = useLoaderData() as (AnalyticsData & { error?: string }) | undefined;
-
-  useEffect(() => { setLoaded(true); }, []);
-
-  useEffect(() => {
-    if (!loaderData) return;
-    if ("error" in loaderData && loaderData.error) {
-      setHasError(true);
-      setErrorMsg(loaderData.error);
-    }
-  }, [loaderData]);
-
-  useEffect(() => {
-    if (fetcher.state === "idle" && fetcher.data) {
-      setSyncing(false);
-      window.location.reload();
-    }
-  }, [fetcher.state]);
-
-  const hSync = () => {
-    setSyncing(true);
-    fetcher.submit({ action: "sync" }, { method: "POST", encType: "application/json" });
+import { requireSubscription } from "../lib/billing.server";
+import { fetchAndComputeAnalytics } from "../lib/analytics.server";
+import { getPreferences } from "../lib/preferences.server";
+import { money } from "../lib/format";
+export async function loader({ request }: LoaderFunctionArgs) {
+  const { admin, shop } = await requireSubscription(request);
+  return {
+    analytics: await fetchAndComputeAnalytics(admin),
+    preferences: await getPreferences(shop.id),
+    shopEmail: shop.email || "",
   };
-
-  const toggleDetails = () => {
-    const opening = !detailsOpen;
-    if (opening) {
-      setFeedbackShown(true);
-      fetch("/api/track", {
+}
+export async function action({ request }: ActionFunctionArgs) {
+  const { admin } = await requireSubscription(request);
+  return { analytics: await fetchAndComputeAnalytics(admin) };
+}
+export default function Today() {
+  const {
+    analytics: d,
+    preferences,
+    shopEmail,
+  } = useLoaderData<typeof loader>();
+  const sync = useFetcher();
+  const prefs = useFetcher<{ success?: boolean; error?: string }>();
+  const test = useFetcher<{ success?: boolean; error?: string }>();
+  const { i18n } = useTranslation();
+  const zh = i18n.language === "zh-CN";
+  const tx = (en: string, cn: string) => (zh ? cn : en);
+  const [open, setOpen] = useState(false),
+    [feedback, setFeedback] = useState(false),
+    [done, setDone] = useState(false);
+  const [email, setEmail] = useState(preferences?.email || shopEmail),
+    [enabled, setEnabled] = useState(preferences?.dailyBrief ?? false),
+    [time, setTime] = useState(preferences?.deliveryTime || "08:00"),
+    [zone, setZone] = useState(preferences?.timezone || d.timezone);
+  useEffect(() => {
+    let id = sessionStorage.getItem("naruto-session");
+    if (!id) {
+      id = crypto.randomUUID();
+      sessionStorage.setItem("naruto-session", id);
+    }
+    const source =
+      new URLSearchParams(window.location.search).get("source") === "email"
+        ? "email"
+        : "direct";
+    void fetch("/api/track", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        event: "app_open",
+        data: {
+          sessionId: id,
+          source,
+          language: i18n.language,
+          briefStatus: d.prioritizedIssues.length
+            ? "needs-attention"
+            : "all-clear",
+        },
+      }),
+    });
+    if (source === "email")
+      void fetch("/api/track", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ event: "email_click", data: { sessionId: id } }),
+      });
+    const timer = setTimeout(() => setFeedback(true), 15000);
+    return () => clearTimeout(timer);
+  }, [d.prioritizedIssues.length, i18n.language]);
+  const toggle = () => {
+    setOpen(!open);
+    if (!open) {
+      setFeedback(true);
+      void fetch("/api/track", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ event: "view_details" }),
       });
     }
-    setDetailsOpen(opening);
   };
-
-  const handleMarkReviewed = () => {
-    if (topIssue) {
-      setReviewedTitles(prev => new Set(prev).add(topIssue.title));
-    }
-  };
-
-  // Email preferences state
-  const [prefLoaded, setPrefLoaded] = useState(false);
-  const [prefEmail, setPrefEmail] = useState("");
-  const [prefDailyBrief, setPrefDailyBrief] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [testSending, setTestSending] = useState(false);
-  const [prefMessage, setPrefMessage] = useState("");
-  const [prefMessageType, setPrefMessageType] = useState<"success" | "critical">("success");
-
-  useEffect(() => {
-    fetch("/api/preferences")
-      .then(r => r.json())
-      .then(d => {
-        setPrefEmail(d.shopEmail || "");
-        setPrefDailyBrief(d.preferences?.dailyBrief !== false);
-        setPrefLoaded(true);
-      })
-      .catch(() => setPrefLoaded(true));
-  }, []);
-
-  const handleSavePreferences = async () => {
-    setSaving(true);
-    setPrefMessage("");
-    try {
-      const r = await fetch("/api/preferences", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: prefEmail, dailyBrief: prefDailyBrief }),
-      });
-      const d = await r.json();
-      setPrefMessage(d.success ? t("email.savedMsg") : d.error || t("email.saveError"));
-      setPrefMessageType(d.success ? "success" : "critical");
-    } catch {
-      setPrefMessage(t("email.networkError"));
-      setPrefMessageType("critical");
-    }
-    setSaving(false);
-  };
-
-  const handleTestEmail = async () => {
-    setTestSending(true);
-    setPrefMessage("");
-    try {
-      const r = await fetch("/api/test-email", { method: "POST" });
-      const d = await r.json();
-      setPrefMessage(d.success ? t("email.testSentMsg") : d.error || t("email.testError"));
-      setPrefMessageType(d.success ? "success" : "critical");
-    } catch {
-      setPrefMessage(t("email.networkError"));
-      setPrefMessageType("critical");
-    }
-    setTestSending(false);
-  };
-
-  // Session tracking
-  const sessionTracked = useRef(false);
-  const [feedbackShown, setFeedbackShown] = useState(false);
-  const [feedbackDone, setFeedbackDone] = useState(false);
-
-  useEffect(() => {
-    if (sessionTracked.current) return;
-    sessionTracked.current = true;
-    fetch("/api/track", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        event: "app_open",
-        data: { language: document.documentElement.lang || "en", source: "direct" },
-      }),
-    });
-  }, []);
-
-  // Show feedback after 15 seconds
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (!feedbackDone) setFeedbackShown(true);
-    }, 15000);
-    return () => clearTimeout(timer);
-  }, [feedbackDone]);
-
-  const handleFeedback = async (useful: boolean) => {
-    setFeedbackShown(false);
-    setFeedbackDone(true);
-    await fetch("/api/track", {
+  const vote = async (useful: boolean) => {
+    const r = await fetch("/api/track", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ event: "feedback", data: { useful } }),
     });
+    if (r.ok) setDone(true);
   };
-
-  if (hasError) {
-    return <ErrorState message={errorMsg} />;
-  }
-
-  if (!loaded || !loaderData || "error" in (loaderData || {})) {
-    return <LoadingSkeleton />;
-  }
-
-  const d = loaderData as AnalyticsData;
-
-  if (d.gmv === 0 && d.totalOrders === 0 && d.totalCustomers === 0) {
-    return <EmptyStateView />;
-  }
-
-  const activeIssues = d.prioritizedIssues.filter(i => !reviewedTitles.has(i.title));
-  const highPriority = activeIssues.filter(i => i.priority === "high");
-  const medPriority = activeIssues.filter(i => i.priority === "medium");
-
-  const status: "all-clear" | "needs-attention" | "action-required" =
-    highPriority.length > 0 ? "action-required"
-    : medPriority.length > 0 ? "needs-attention"
-    : "all-clear";
-
-  const topIssue = activeIssues.length > 0 ? activeIssues[0] : null;
-  const totalRevenueImpact = activeIssues.reduce((sum, i) => sum + i.revenueImpact, 0);
-
-  const statusText = status === "all-clear"
-    ? "Good morning. Your store is running smoothly."
-    : status === "needs-attention"
-      ? "There\u2019s something you may want to look at today."
-      : `One item needs your attention today. Potential impact: ${formatCurrency(totalRevenueImpact)}.`;
-
-  const otherIssues = [...medPriority.slice(topIssue?.priority === "medium" ? 1 : 0)];
-
+  const issue = d.prioritizedIssues[0];
   return (
     <Page
-      title=""
-      subtitle=""
-      primaryAction={
-        <Button variant="primary" icon={RefreshIcon} onClick={hSync} loading={syncing}>
-          {syncing ? "Updating\u2026" : "Update"}
-        </Button>
-      }
+      title={tx("Daily Brief", "每日经营简报")}
+      primaryAction={{
+        content: tx("Refresh", "刷新"),
+        loading: sync.state !== "idle",
+        onAction: () => sync.submit({}, { method: "post" }),
+      }}
     >
-      <BlockStack gap="300">
-
-        {/* Status line */}
-        <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "0" }}>
-          <span style={{
-            fontSize: "14px", lineHeight: "18px",
-            color: status === "all-clear" ? "#008060" : status === "needs-attention" ? "#B98900" : "#D82C0D"
-          }}>
-            {status === "all-clear" ? "\u25CF" : "\u25CF"}
-          </span>
-          <Text as="p" variant="bodyMd" fontWeight="medium">{statusText}</Text>
-        </div>
-
-        {/* Decision card */}
-        {topIssue ? (
-          <div style={{ border: "1px solid #E1E3E5", borderRadius: "10px", padding: "20px", position: "relative", overflow: "hidden" }}>
-            <div style={{
-              position: "absolute", left: 0, top: 0, width: "4px", height: "100%",
-              background: topIssue.priority === "high" ? "#D82C0D" : topIssue.priority === "medium" ? "#B98900" : "#008060",
-              borderRadius: "2px"
-            }} />
-            <BlockStack gap="200">
-              <FocusBadge priority={topIssue.priority} />
-              <Text as="h2" variant="headingMd" fontWeight="semibold">{topIssue.title}</Text>
-              <Text as="p" variant="bodyMd" tone="subdued">{topIssue.detail}</Text>
-              {topIssue.revenueImpact > 0 && (
-                <Text as="p" variant="bodyMd" fontWeight="bold">
-                  Potential impact: up to {formatCurrency(topIssue.revenueImpact)}
-                </Text>
-              )}
-              <div style={{ background: "#F6F6F7", borderRadius: "8px", padding: "12px 16px" }}>
-                <BlockStack gap="050">
-                  <Text as="span" variant="bodyXs" tone="subdued" fontWeight="semibold">Your move</Text>
-                  <Text as="p" variant="bodySm">{topIssue.action}</Text>
-                </BlockStack>
-              </div>
-              <InlineStack gap="200">
-                <Button variant="primary" onClick={toggleDetails}>
-                  {detailsOpen ? "Hide the numbers" : "See what\u2019s behind this"}
-                </Button>
-                <Button variant="secondary" onClick={handleMarkReviewed}>
-                  I\u2019ve got this
-                </Button>
-              </InlineStack>
-            </BlockStack>
-          </div>
-        ) : (
-          /* All Clear */
-          <Card padding="400">
-            <BlockStack gap="300">
-              <InlineStack gap="300" align="start">
-                <span style={{ fontSize: "24px", lineHeight: "28px", color: "#008060" }}>\u2713</span>
-                <BlockStack gap="100">
-                  <Text as="h2" variant="headingLg" fontWeight="semibold" tone="success">
-                    Good morning. Your store is running smoothly.
-                  </Text>
-                  <Text as="p" variant="bodyMd" tone="subdued">
-                    Yesterday brought in {formatCurrency(d.gmv)} from {d.totalOrders} order{d.totalOrders !== 1 ? 's' : ''} \u2014 consistent with your recent performance.
-                  </Text>
-                  {d.totalCustomers > 0 && (
-                    <Text as="p" variant="bodySm" tone="subdued">
-                      You have {d.totalCustomers} customer{d.totalCustomers !== 1 ? 's' : ''} ({d.newCustomers} new in the last month). {d.repeatCustomers > 0 ? `${d.repeatCustomers} have ordered more than once.` : ''}
-                    </Text>
-                  )}
-                </BlockStack>
-              </InlineStack>
-              <InlineStack gap="200">
-                <Button variant="primary">Start your day</Button>
-                <Button variant="secondary" onClick={toggleDetails}>
-                  {detailsOpen ? "Hide the numbers" : "See the details"}
-                </Button>
-              </InlineStack>
-            </BlockStack>
-          </Card>
-        )}
-
-        {/* View / Hide supporting details */}
-        {!topIssue && (
-          <div style={{ textAlign: "center", marginTop: "-8px" }}>
-            <Button variant="plain" onClick={toggleDetails}>
-              {detailsOpen ? "Hide the numbers" : "See the numbers behind this"}
-            </Button>
-          </div>
-        )}
-
-        {/* Collapsed details */}
-        <Collapsible open={detailsOpen} id="supporting-details">
-          <div style={{ paddingTop: "16px" }}>
+      <BlockStack gap="400">
+        <Text as="p">
+          {d.periodStart} – {d.periodEnd} · {d.timezone}
+        </Text>
+        <Card>
           <BlockStack gap="300">
-
-            <MetricsSection data={d} />
-
-            {otherIssues.length > 0 && (
-              <BlockStack gap="100">
-                <Text as="h3" variant="headingSm" fontWeight="semibold" tone="subdued">For your awareness</Text>
-                {otherIssues.map((issue, i) => (
-                  <SignalCard key={i} issue={issue} />
-                ))}
-              </BlockStack>
+            <Text as="h2" variant="headingLg">
+              {issue
+                ? tx(
+                    issue.title,
+                    issue.issueType === "revenue_decline"
+                      ? "已付款订单金额下降"
+                      : "销售集中于三款商品",
+                  )
+                : tx("No review rule triggered", "当前未触发关注规则")}
+            </Text>
+            <Text as="p">
+              {issue
+                ? tx(
+                    issue.detail,
+                    issue.issueType === "revenue_decline"
+                      ? `相比前 7 个完整日，已付款订单金额下降 ${d.trends.gmv.change}%。20% 是提醒阈值，不是预测。`
+                      : `前三款商品占商品原价总额的 ${issue.issueData?.top3Pct}%。这是集中度描述，不代表损失预测。`,
+                  )
+                : tx(
+                    "This does not confirm overall store health. Check the data and your business context.",
+                    "这不代表店铺整体健康。请结合支撑数据和经营背景判断。",
+                  )}
+            </Text>
+            {issue && (
+              <Text as="p">
+                {tx(
+                  issue.action,
+                  issue.issueType === "revenue_decline"
+                    ? "先比较订单量和客单价，再检查近期促销及库存。"
+                    : "规划下次促销前，检查这些商品的可售库存。",
+                )}
+              </Text>
             )}
-
-            <SupportingData data={d} />
-
+            <Button onClick={toggle}>
+              {open
+                ? tx("Hide details", "收起详情")
+                : tx("View details", "查看详情")}
+            </Button>
           </BlockStack>
-          </div>
+        </Card>
+        <Collapsible open={open} id="brief-details">
+          <Card>
+            <BlockStack gap="300">
+              <Text as="p">
+                {tx("Compared with", "对比周期")} {d.comparisonStart} –{" "}
+                {d.comparisonEnd}
+              </Text>
+              <InlineStack gap="600" wrap>
+                {[
+                  {
+                    label: tx("Paid order value", "已付款订单金额"),
+                    value: money(d.gmv, d.currencyCode, i18n.language),
+                    trend: d.trends.gmv,
+                  },
+                  {
+                    label: tx("Paid orders", "已付款订单"),
+                    value: d.totalOrders,
+                    trend: d.trends.orders,
+                  },
+                  {
+                    label: tx("Average order value", "客单价"),
+                    value: money(d.aov, d.currencyCode, i18n.language),
+                    trend: d.trends.aov,
+                  },
+                ].map((m) => (
+                  <BlockStack key={m.label} gap="100">
+                    <Text as="p">{m.label}</Text>
+                    <Text as="p" variant="headingLg">
+                      {m.value}
+                    </Text>
+                    {m.trend.direction !== "flat" && (
+                      <Text as="p">
+                        {m.trend.direction === "up" ? "↑" : "↓"}{" "}
+                        {m.trend.change}%
+                      </Text>
+                    )}
+                  </BlockStack>
+                ))}
+              </InlineStack>
+              <Text as="p" tone="subdued">
+                {tx(
+                  "Includes tax and shipping. Excludes test, cancelled, refunded and partially refunded orders. Not net sales or profit. Percentage changes are omitted when the previous value is zero.",
+                  "包含税费与运费；排除测试、取消、退款及部分退款订单。不代表净销售额或利润。前期值为零时不显示变化百分比。",
+                )}
+              </Text>
+              <Text as="h3" variant="headingMd">
+                {tx(
+                  "Top products — gross value before discounts",
+                  "头部商品——折扣前商品总额",
+                )}
+              </Text>
+              {d.topSkuRevenue.slice(0, 3).map((p) => (
+                <InlineStack key={p.sku} align="space-between" wrap>
+                  <Text as="p">{p.name}</Text>
+                  <Text as="p">
+                    {money(p.revenue, d.currencyCode, i18n.language)}
+                  </Text>
+                </InlineStack>
+              ))}
+            </BlockStack>
+          </Card>
         </Collapsible>
-
-        {/* Feedback */}
-        {feedbackShown && !feedbackDone && (
-          <Card padding="200">
-            <BlockStack gap="150">
-              <InlineStack gap="200" align="center" blockAlign="center">
-                <Text as="span" variant="bodyMd">Was today’s brief useful?</Text>
-                <Button size="slim" onClick={() => handleFeedback(true)}>
-                  👍 Useful
-                </Button>
-                <Button size="slim" onClick={() => handleFeedback(false)}>
-                  👎 Not useful
-                </Button>
-              </InlineStack>
-            </BlockStack>
-          </Card>
-        )}
-
-        {/* Email Brief Setup */}
-        {prefLoaded && (
-          <Card padding="300">
+        {feedback && !done && (
+          <Card>
             <BlockStack gap="200">
-              <InlineStack gap="200" align="space-between">
-                <Text as="h3" variant="headingSm" fontWeight="semibold">{t("email.title")}</Text>
-                <Badge tone={prefDailyBrief ? "success" : "attention"}>
-                  {prefDailyBrief ? t("email.active") : t("email.paused")}
-                </Badge>
-              </InlineStack>
-              <TextField
-                label={t("email.emailLabel")}
-                value={prefEmail}
-                onChange={setPrefEmail}
-                placeholder={t("email.placeholder")}
-                autoComplete="email"
-              />
+              <Text as="p">
+                {tx("Was this brief useful?", "这份简报有帮助吗？")}
+              </Text>
               <InlineStack gap="200">
-                <Button onClick={() => setPrefDailyBrief(!prefDailyBrief)}>
-                  {prefDailyBrief ? t("email.disableBtn") : t("email.enableBtn")}
+                <Button onClick={() => void vote(true)}>
+                  {tx("Useful", "有帮助")}
+                </Button>
+                <Button onClick={() => void vote(false)}>
+                  {tx("Not useful", "没帮助")}
                 </Button>
               </InlineStack>
-              <InlineStack gap="200">
-                <Button variant="primary" onClick={handleSavePreferences} loading={saving}>
-                  {t("email.saveBtn")}
-                </Button>
-                <Button onClick={handleTestEmail} loading={testSending}>
-                  {t("email.testBtn")}
-                </Button>
-              </InlineStack>
-              {prefMessage && (
-                <Text as="p" variant="bodySm" tone={prefMessageType}>
-                  {prefMessage}
-                </Text>
-              )}
             </BlockStack>
           </Card>
         )}
-
+        <Card>
+          <BlockStack gap="300">
+            <Text as="h2" variant="headingMd">
+              {tx("Daily email", "每日邮件")}
+            </Text>
+            <Text as="p">
+              {tx(
+                "Emails are currently delivered in English.",
+                "邮件目前使用英语发送。",
+              )}
+            </Text>
+            <TextField
+              label={tx("Email address", "邮箱")}
+              type="email"
+              value={email}
+              onChange={setEmail}
+              autoComplete="email"
+            />
+            <Checkbox
+              label={tx("Send a daily brief", "发送每日简报")}
+              checked={enabled}
+              onChange={setEnabled}
+            />
+            <TextField
+              label={tx("Delivery time (HH:MM)", "发送时间（HH:MM）")}
+              value={time}
+              onChange={setTime}
+              autoComplete="off"
+            />
+            <TextField
+              label={tx(
+                "Timezone (e.g. Asia/Shanghai)",
+                "时区（如 Asia/Shanghai）",
+              )}
+              value={zone}
+              onChange={setZone}
+              autoComplete="off"
+            />
+            <InlineStack gap="200">
+              <Button
+                loading={prefs.state !== "idle"}
+                onClick={() =>
+                  prefs.submit(
+                    {
+                      email,
+                      dailyBrief: enabled,
+                      deliveryTime: time,
+                      timezone: zone,
+                    },
+                    {
+                      method: "post",
+                      action: "/api/preferences",
+                      encType: "application/json",
+                    },
+                  )
+                }
+              >
+                {tx("Save preferences", "保存设置")}
+              </Button>
+              <Button
+                loading={test.state !== "idle"}
+                disabled={
+                  prefs.state !== "idle" ||
+                  !preferences?.email ||
+                  email.trim() !== preferences.email.trim()
+                }
+                onClick={() =>
+                  test.submit(
+                    { email },
+                    {
+                      method: "post",
+                      action: "/api/test-email",
+                      encType: "application/json",
+                    },
+                  )
+                }
+              >
+                {tx("Send test email", "发送测试邮件")}
+              </Button>
+            </InlineStack>
+            <Text as="p" tone="subdued">
+              {tx(
+                "Save your email address before sending a test. One test attempt per five-minute window.",
+                "请先保存收件邮箱，再发送测试邮件。每个 5 分钟时段最多尝试一次。",
+              )}
+            </Text>
+            {prefs.data && (
+              <Banner tone={prefs.data.success ? "success" : "critical"}>
+                <p>
+                  {prefs.data.success
+                    ? tx("Saved", "已保存")
+                    : prefs.data.error}
+                </p>
+              </Banner>
+            )}
+            {test.data && (
+              <Banner tone={test.data.success ? "success" : "critical"}>
+                <p>
+                  {test.data.success
+                    ? tx("Email accepted for delivery", "邮件已提交发送")
+                    : test.data.error}
+                </p>
+              </Banner>
+            )}
+          </BlockStack>
+        </Card>
       </BlockStack>
     </Page>
   );
+}
+export function ErrorBoundary() {
+  return boundary.error(useRouteError());
 }

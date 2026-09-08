@@ -1,50 +1,21 @@
 import type { LoaderFunctionArgs, ActionFunctionArgs } from "react-router";
-import { data } from "react-router";
-import { authenticate } from "../shopify.server";
-import { fetchAndComputeAnalytics, saveSnapshot, getSnapshotHistory } from "../lib/analytics.server";
-import prisma from "../db.server";
-
-export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { admin, session } = await authenticate.admin(request);
-  const shop = session.shop;
-
-  let shopRecord = await prisma.shop.findUnique({ where: { myshopifyDomain: shop } });
-  if (!shopRecord) {
-    const shopRes = await admin.graphql(`query { shop { id name email myshopifyDomain createdAt } }`);
-    const shopJson = await shopRes.json();
-    const s = shopJson.data.shop;
-    shopRecord = await prisma.shop.create({
-      data: { id: s.id, myshopifyDomain: s.myshopifyDomain, name: s.name, email: s.email, createdAt: new Date(s.createdAt) },
-    });
-  }
-
-  const analyticsData = await fetchAndComputeAnalytics(admin);
-  const history = await getSnapshotHistory(shopRecord.id);
-  analyticsData.snapshotHistory = history;
-
-  return data(analyticsData);
-};
-
-export const action = async ({ request }: ActionFunctionArgs) => {
-  const { admin, session } = await authenticate.admin(request);
-  const shop = session.shop;
+import { requireSubscription } from "../lib/billing.server";
+import {
+  fetchAndComputeAnalytics,
+  saveSnapshot,
+} from "../lib/analytics.server";
+export async function loader({ request }: LoaderFunctionArgs) {
+  const { admin } = await requireSubscription(request, true);
+  return Response.json(await fetchAndComputeAnalytics(admin));
+}
+export async function action({ request }: ActionFunctionArgs) {
+  const { admin, shop } = await requireSubscription(request, true);
+  if (request.method !== "POST") return new Response(null, { status: 405 });
   const body = await request.json();
-  const { action: actionType } = body;
-
-  let shopRecord = await prisma.shop.findUnique({ where: { myshopifyDomain: shop } });
-  if (!shopRecord) {
-    const shopRes = await admin.graphql(`query { shop { id name email myshopifyDomain createdAt } }`);
-    const shopJson = await shopRes.json();
-    const s = shopJson.data.shop;
-    shopRecord = await prisma.shop.create({
-      data: { id: s.id, myshopifyDomain: s.myshopifyDomain, name: s.name, email: s.email, createdAt: new Date(s.createdAt) },
-    });
-  }
-
-  if (actionType === "sync") {
-    const syncResult = await saveSnapshot(admin, shopRecord.id);
-    return data({ success: true, message: "Data synced successfully", syncResult });
-  }
-
-  return data({ success: false, message: "Unknown action" }, { status: 400 });
-};
+  if (body.action !== "sync")
+    return Response.json({ error: "Invalid action" }, { status: 400 });
+  return Response.json({
+    success: true,
+    data: await saveSnapshot(admin, shop.id),
+  });
+}

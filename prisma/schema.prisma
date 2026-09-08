@@ -124,7 +124,7 @@ model NotificationPreference {
   id           Int      @id @default(autoincrement())
   shopId       String   @unique
   email        String
-  dailyBrief   Boolean  @default(true)
+  dailyBrief   Boolean  @default(false)
   deliveryTime String   @default("08:00")
   timezone     String   @default("UTC")
   lastDailyAt  DateTime?
@@ -137,7 +137,30 @@ model AnalyticsEvent {
   shopId    String
   event     String
   data      String?
+  dedupeKey String? @unique
   createdAt DateTime @default(now())
 
   @@index([shopId, event, createdAt])
+}
+
+model PrivacyRequest {
+ id String @id
+ shopDomain String
+ customerId String?
+ orderIdsJson String @default("[]")
+ createdAt DateTime @default(now())
+ fulfilledAt DateTime?
+ @@index([shopDomain])
+}
+
+model BriefDelivery {
+ payloadJson String?
+ id String @id
+ shopId String
+ date String
+ status String @default("sending")
+ createdAt DateTime @default(now())
+ claimedAt DateTime @default(now())
+ sentAt DateTime?
+ @@unique([shopId, date])
 }

@@ -1,3 +1,16 @@
 .cache
 build
 node_modules
+.git
+.env
+.env.*
+!.env.example
+.shopify
+.vercel
+.codex
+.agents
+docs
+tests
+*.pem
+*.key
+*.log

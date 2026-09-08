@@ -1,71 +1,134 @@
 import type { LoaderFunctionArgs } from "react-router";
-import { data } from "react-router";
 import prisma from "../db.server";
 import { unauthenticated } from "../shopify.server";
 import { fetchAndComputeAnalytics } from "../lib/analytics.server";
+import { getSubscription } from "../lib/billing.server";
+import { requireInternal } from "../lib/internal-auth.server";
 import { sendDailyBrief } from "../lib/email.server";
-import { getAllActivePreferences, updateLastDailyAt } from "../lib/preferences.server";
-
-export const loader = async ({ request }: LoaderFunctionArgs) => {
-  // Verify cron secret
-  const auth = request.headers.get("authorization");
-  const cronSecret = process.env.CRON_SECRET;
-  if (cronSecret && auth !== `Bearer ${cronSecret}`) {
-    return new Response("Unauthorized", { status: 401 });
-  }
-
-  const prefs = await getAllActivePreferences();
-  const results: { shopId: string; success: boolean; error?: string; skipped?: boolean }[] = [];
-  const yesterday = new Date();
-  yesterday.setDate(yesterday.getDate() - 1);
-
-  for (const pref of prefs) {
-    // Skip if already sent today
-    if (pref.lastDailyAt && pref.lastDailyAt > yesterday) {
-      results.push({ shopId: pref.shopId, success: true, skipped: true });
-      continue;
-    }
-
-    try {
-      // Find shop record to get domain
-      const shop = await prisma.shop.findUnique({ where: { id: pref.shopId } });
-      if (!shop?.myshopifyDomain) {
-        results.push({ shopId: pref.shopId, success: false, error: "Shop not found" });
-        continue;
+import { localDate } from "../lib/analytics-core";
+import { dueDate } from "../lib/delivery";
+export async function loader({ request }: LoaderFunctionArgs) {
+  requireInternal(request, "CRON_SECRET");
+  const now = new Date();
+  await prisma.$transaction([
+    prisma.analyticsSnapshot.deleteMany({
+      where: { snapshotDate: { lt: new Date(now.getTime() - 90 * 86400000) } },
+    }),
+    prisma.analyticsEvent.deleteMany({
+      where: { createdAt: { lt: new Date(now.getTime() - 90 * 86400000) } },
+    }),
+    prisma.briefDelivery.deleteMany({
+      where: { createdAt: { lt: new Date(now.getTime() - 30 * 86400000) } },
+    }),
+    prisma.privacyRequest.deleteMany({
+      where: { fulfilledAt: { lt: new Date(now.getTime() - 30 * 86400000) } },
+    }),
+  ]);
+  let cursor: number | undefined;
+  let processed = 0,
+    failed = 0;
+  // Bounded pages; pending shops are retried on the next invocation if execution times out.
+  do {
+    const prefs = await prisma.notificationPreference.findMany({
+      where: { dailyBrief: true },
+      take: 25,
+      orderBy: { id: "asc" },
+      ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
+    });
+    for (const pref of prefs) {
+      try {
+        const date = dueDate(now, pref.timezone, pref.deliveryTime);
+        if (!date) continue;
+        if (
+          pref.lastDailyAt &&
+          localDate(pref.lastDailyAt, pref.timezone) === date
+        )
+          continue;
+        const shop = await prisma.shop.findUnique({
+          where: { id: pref.shopId },
+        });
+        if (!shop) continue;
+        if (!(await getSubscription(shop.id)).active) continue;
+        const id = `${shop.id}:${date}`;
+        const delivery = await prisma.briefDelivery.upsert({
+          where: { id },
+          create: { id, shopId: shop.id, date, status: "pending" },
+          update: {},
+        });
+        if (delivery.status === "sent") continue;
+        // Do not retry beyond the provider's idempotency retention window.
+        if (now.getTime() - delivery.createdAt.getTime() > 23 * 3600000)
+          continue;
+        const claim = await prisma.briefDelivery.updateMany({
+          where: {
+            id,
+            OR: [
+              { status: "pending" },
+              {
+                status: "sending",
+                claimedAt: { lt: new Date(now.getTime() - 10 * 60000) },
+              },
+            ],
+          },
+          data: { status: "sending", claimedAt: now },
+        });
+        if (!claim.count) continue;
+        let params: Parameters<typeof sendDailyBrief>[0];
+        if (delivery.payloadJson) {
+          params = JSON.parse(delivery.payloadJson);
+        } else {
+          const { admin } = await unauthenticated.admin(shop.myshopifyDomain);
+          const analytics = await fetchAndComputeAnalytics(admin);
+          params = {
+            to: pref.email,
+            storeName: shop.name || shop.myshopifyDomain,
+            storeDomain: shop.myshopifyDomain,
+            data: analytics,
+            status: analytics.prioritizedIssues.length
+              ? "needs-attention"
+              : "all-clear",
+            topIssue: analytics.prioritizedIssues[0] || null,
+            idempotencyKey: `daily-brief/${id}`,
+          };
+          // Freeze the payload before sending: retries must use identical content.
+          await prisma.briefDelivery.update({
+            where: { id },
+            data: { payloadJson: JSON.stringify(params) },
+          });
+        }
+        const enabled = await prisma.notificationPreference.findUnique({
+          where: { shopId: shop.id },
+        });
+        if (!enabled?.dailyBrief || enabled.email !== params.to) {
+          await prisma.briefDelivery.update({
+            where: { id },
+            data: { status: "cancelled" },
+          });
+          continue;
+        }
+        if (!(await getSubscription(shop.id)).active) continue;
+        const result = await sendDailyBrief(params);
+        if (!result.success) {
+          failed++;
+          continue;
+        }
+        await prisma.$transaction([
+          prisma.briefDelivery.update({
+            where: { id },
+            data: { status: "sent", sentAt: new Date() },
+          }),
+          prisma.notificationPreference.update({
+            where: { shopId: shop.id },
+            data: { lastDailyAt: new Date() },
+          }),
+        ]);
+        processed++;
+      } catch {
+        console.error("Daily brief job failed", { shopId: pref.shopId });
+        failed++;
       }
-
-      // Use unauthenticated admin to fetch analytics
-      const { admin } = await unauthenticated.admin(shop.myshopifyDomain);
-      const analyticsData = await fetchAndComputeAnalytics(admin);
-
-      const activeIssues = analyticsData.prioritizedIssues;
-      const highPriority = activeIssues.filter(i => i.priority === "high");
-      const medPriority = activeIssues.filter(i => i.priority === "medium");
-      const status = highPriority.length > 0 ? "action-required"
-        : medPriority.length > 0 ? "needs-attention" : "all-clear";
-      const topIssue = activeIssues.length > 0 ? activeIssues[0] : null;
-
-      const result = await sendDailyBrief({
-        to: pref.email,
-        storeName: shop.name || shop.myshopifyDomain,
-        storeDomain: shop.myshopifyDomain,
-        data: analyticsData,
-        status,
-        topIssue,
-        appUrl: process.env.SHOPIFY_APP_URL || "",
-      });
-
-      if (result.success) {
-        await updateLastDailyAt(pref.shopId);
-      }
-
-      results.push({ shopId: pref.shopId, ...result });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Unknown error";
-      console.error(`Cron error for shop ${pref.shopId}:`, message);
-      results.push({ shopId: pref.shopId, success: false, error: message });
     }
-  }
-
-  return data({ processed: results.length, results });
-};
+    cursor = prefs.length === 25 ? prefs[prefs.length - 1].id : undefined;
+  } while (cursor);
+  return Response.json({ processed, failed }, { status: failed ? 503 : 200 });
+}
