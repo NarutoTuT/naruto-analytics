@@ -1,9 +1,11 @@
+import { requireDpa } from "../lib/dpa.server";
 import type { ActionFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 export async function action({ request }: ActionFunctionArgs) {
   if (request.method !== "POST") return new Response(null, { status: 405 });
   const { session } = await authenticate.admin(request);
+  await requireDpa(session.shop, true);
   const shop = await prisma.shop.findUnique({
     where: { myshopifyDomain: session.shop },
   });

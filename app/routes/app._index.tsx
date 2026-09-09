@@ -51,10 +51,12 @@ export default function Today() {
     [time, setTime] = useState(preferences?.deliveryTime || "08:00"),
     [zone, setZone] = useState(preferences?.timezone || d.timezone);
   useEffect(() => {
-    let id = sessionStorage.getItem("naruto-session");
-    if (!id) {
-      id = crypto.randomUUID();
+    let id: string = crypto.randomUUID();
+    try {
+      id = sessionStorage.getItem("naruto-session") || id;
       sessionStorage.setItem("naruto-session", id);
+    } catch {
+      /* Keep an in-memory ID when browser storage is blocked. */
     }
     const source =
       new URLSearchParams(window.location.search).get("source") === "email"

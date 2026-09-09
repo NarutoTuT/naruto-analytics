@@ -33,3 +33,6 @@ database.sqlite
 /*.key
 /*.crt
 /*.pem
+
+# Restricted incident evidence; never publish
+/.private-security/

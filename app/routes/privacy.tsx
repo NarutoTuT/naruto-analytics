@@ -22,7 +22,7 @@ export default function Privacy() {
       }}
     >
       <h1>Naruto Analytics privacy policy</h1>
-      <p>Last updated: September 8, 2026</p>
+      <p>Last updated: September 9, 2026</p>
       <p>
         {operator} operates Naruto Analytics. Contact:{" "}
         <a href={`mailto:${email}`}>{email}</a>.
@@ -45,9 +45,11 @@ export default function Privacy() {
         We use this information to deliver the service, manage access to the
         paid plan and understand whether merchants find briefs useful. We do not
         sell personal information. Shopify handles subscriptions. Vercel hosts
-        the service, the configured PostgreSQL provider stores application data,
-        and Resend delivers email reports. These providers may process data
-        outside your country.
+        the service, Neon stores application data,
+        and Resend delivers email reports. The current application and database run in the United States. Resend
+        stores message content and delivery data in the United States. The
+        operator may access administrative systems from mainland China. These
+        locations may be outside your country.
       </p>
       <h2>Retention and deletion</h2>
       <p>

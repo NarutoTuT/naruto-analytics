@@ -1,0 +1,37 @@
+# Public staging configuration released with user approval on 2026-09-09.
+# No real merchants; original hosting retained for rollback.
+# Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
+
+client_id = "d68250b2098d95f0b840de5d3814707a"
+name = "Naruto Analytics"
+application_url = "https://naruto-analytics-staging.vercel.app"
+embedded = true
+
+[build]
+automatically_update_urls_on_dev = false
+
+[webhooks]
+api_version = "2026-07"
+
+  [[webhooks.subscriptions]]
+  uri = "/webhooks/app/scopes_update"
+  topics = [ "app/scopes_update" ]
+
+  [[webhooks.subscriptions]]
+  uri = "/webhooks/app/uninstalled"
+  topics = [ "app/uninstalled" ]
+
+[access_scopes]
+# Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
+scopes = "read_orders"
+
+[auth]
+redirect_urls = [
+  "https://naruto-analytics-staging.vercel.app/auth",
+  "https://naruto-analytics-staging.vercel.app/auth/callback",
+  "https://naruto-analytics-staging.vercel.app/api/auth/callback",
+]
+
+[[webhooks.subscriptions]]
+compliance_topics = ["customers/data_request", "customers/redact", "shop/redact"]
+uri = "/webhooks/privacy"

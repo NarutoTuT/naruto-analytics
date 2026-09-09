@@ -1,0 +1,4 @@
+.private-security/
+.env
+.env.*
+.git/

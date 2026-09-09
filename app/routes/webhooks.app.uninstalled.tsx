@@ -10,6 +10,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const record = await db.shop.findUnique({ where: { myshopifyDomain: shop } });
   await db.$transaction([
     db.session.deleteMany({ where: { shop } }),
+    db.legalAcceptance.updateMany({where:{shopDomain:shop},data:{revokedAt:new Date()}}),
     ...(record
       ? [
           db.notificationPreference.updateMany({

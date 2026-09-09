@@ -1,3 +1,4 @@
+import { requireDpa } from "../lib/dpa.server";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { data } from "react-router";
 import { authenticate } from "../shopify.server";
@@ -6,6 +7,7 @@ import prisma from "../db.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
+  await requireDpa(session.shop, true);
   const shop = await prisma.shop.findUnique({
     where: { myshopifyDomain: session.shop },
   });
@@ -19,6 +21,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   const { session } = await authenticate.admin(request);
+  await requireDpa(session.shop, true);
   if (request.method !== "POST")
     return data({ error: "Method not allowed" }, { status: 405 });
 

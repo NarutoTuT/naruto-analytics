@@ -2,12 +2,20 @@ import type { LoaderFunctionArgs } from "react-router";
 import { data } from "react-router";
 import { requireInternal } from "../lib/internal-auth.server";
 import prisma from "../db.server";
+import { TEST_SHOPS } from "../lib/test-store-policy.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   requireInternal(request, "INTERNAL_ADMIN_SECRET");
-  // Fetch all relevant events
+  const allowed = await prisma.shop.findMany({
+    where: { myshopifyDomain: { in: [...TEST_SHOPS] } },
+    select: { id: true },
+  });
+  // Restrict internal reporting before reading events.
   const events = await prisma.analyticsEvent.findMany({
-    where: { event: { in: ["app_open", "feedback"] } },
+    where: {
+      shopId: { in: allowed.map((shop) => shop.id) },
+      event: { in: ["app_open", "feedback"] },
+    },
     orderBy: { createdAt: "desc" },
   });
 

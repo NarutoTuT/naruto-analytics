@@ -1,5 +1,9 @@
 import prisma from "../db.server";
 import {
+  requireDevelopmentShop,
+  requireTestShop,
+} from "./test-store-policy.server";
+import {
   computeAnalytics,
   localDate,
   shiftDate,
@@ -26,7 +30,7 @@ export const ORDERS_QUERY = `query BriefOrders($after: String, $query: String!) 
 export const ITEMS_QUERY = `query BriefItems($id: ID!, $after: String!) {
   order(id: $id) { lineItems(first: 100, after: $after) { nodes { name sku quantity originalTotalSet { shopMoney { amount } } } pageInfo { hasNextPage endCursor } } }
 }`;
-export const SHOP_QUERY = `query BriefShop { shop { id name email myshopifyDomain createdAt currencyCode ianaTimezone } }`;
+export const SHOP_QUERY = `query BriefShop { shop { id name email myshopifyDomain createdAt currencyCode ianaTimezone plan { partnerDevelopment } } }`;
 export async function graphqlData(
   admin: Admin,
   query: string,
@@ -40,6 +44,7 @@ export async function graphqlData(
 }
 export async function ensureShop(admin: Admin) {
   const { shop } = await graphqlData(admin, SHOP_QUERY);
+  requireDevelopmentShop(shop);
   return prisma.shop.upsert({
     where: { id: shop.id },
     create: {
@@ -61,6 +66,7 @@ export async function ensureShop(admin: Admin) {
 }
 export async function fetchAndComputeAnalytics(admin: Admin) {
   const { shop } = await graphqlData(admin, SHOP_QUERY);
+  requireDevelopmentShop(shop);
   const now = new Date();
   const today = localDate(now, shop.ianaTimezone);
   // Pad UTC boundaries, then filter exact shop-local calendar dates in the pure calculation.
@@ -110,6 +116,8 @@ export async function saveSnapshot(admin: Admin, shopId: string) {
   return data;
 }
 export async function getSnapshotHistory(shopId: string) {
+  const tenant = await prisma.shop.findUnique({ where: { id: shopId } });
+  requireTestShop(tenant?.myshopifyDomain);
   const snapshots = await prisma.analyticsSnapshot.findMany({
     where: { shopId },
     orderBy: { snapshotDate: "desc" },

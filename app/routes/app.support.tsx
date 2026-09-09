@@ -37,6 +37,9 @@ export default function Support() {
           <Button url="/privacy" external>
             {zh ? "隐私政策" : "Privacy policy"}
           </Button>
+          <Button url="/app/agreement">
+            {zh ? "数据处理协议" : "Data processing agreement"}
+          </Button>
           <Button url="/app/billing">
             {zh ? "管理订阅" : "Manage subscription"}
           </Button>

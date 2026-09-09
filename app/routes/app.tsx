@@ -1,5 +1,13 @@
+import type { HeadersFunction } from "react-router";
+import styles from "../styles/app-navigation.module.css";
 import type { LoaderFunctionArgs } from "react-router";
-import { Link, Outlet, useLoaderData, useRouteError } from "react-router";
+import {
+  Link,
+  Outlet,
+  useLoaderData,
+  useRouteError,
+  useLocation,
+} from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { AppProvider as ShopifyAppProvider } from "@shopify/shopify-app-react-router/react";
 import enTranslations from "@shopify/polaris/locales/en.json";
@@ -34,11 +42,16 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 export default function App() {
   const { apiKey } = useLoaderData<typeof loader>();
   const { t, i18n } = useTranslation();
+  const { pathname } = useLocation();
 
   const switchLanguage = useCallback(() => {
     const next = i18n.language === "zh-CN" ? "en" : "zh-CN";
     i18n.changeLanguage(next);
-    localStorage.setItem("naruto-language", next);
+    try {
+      localStorage.setItem("naruto-language", next);
+    } catch {
+      /* Language changes still work without persistence. */
+    }
     document.documentElement.lang = next;
   }, [i18n]);
 
@@ -58,7 +71,7 @@ export default function App() {
       <PolarisAppProvider i18n={polarisTranslations} linkComponent={AppLink}>
         <Frame
           navigation={
-            <Navigation location="/app">
+            <Navigation location={pathname}>
               <Navigation.Section
                 title="Naruto Analytics"
                 items={[
@@ -89,6 +102,34 @@ export default function App() {
             </Navigation>
           }
         >
+          <nav
+            className={styles.mobile}
+            aria-label={
+              i18n.language === "zh-CN" ? "应用导航" : "App navigation"
+            }
+          >
+            <Link
+              to="/app"
+              aria-current={pathname === "/app" ? "page" : undefined}
+            >
+              {t("nav.today")}
+            </Link>
+            <Link
+              to="/app/billing"
+              aria-current={pathname === "/app/billing" ? "page" : undefined}
+            >
+              {i18n.language === "zh-CN" ? "订阅" : "Subscription"}
+            </Link>
+            <Link
+              to="/app/support"
+              aria-current={pathname === "/app/support" ? "page" : undefined}
+            >
+              {i18n.language === "zh-CN" ? "支持与隐私" : "Support & privacy"}
+            </Link>
+            <button type="button" onClick={switchLanguage}>
+              {langLabel}
+            </button>
+          </nav>
           <Outlet />
         </Frame>
       </PolarisAppProvider>
@@ -99,3 +140,5 @@ export default function App() {
 export function ErrorBoundary() {
   return boundary.error(useRouteError());
 }
+
+export const headers: HeadersFunction = (args) => boundary.headers(args);

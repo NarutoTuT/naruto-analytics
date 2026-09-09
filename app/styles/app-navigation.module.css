@@ -1,0 +1,38 @@
+.mobile {
+  display: none;
+}
+@media (max-width: 767px) {
+  .mobile {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+    padding: 8px 12px;
+    background: white;
+    border-bottom: 1px solid #e3e3e3;
+  }
+  .mobile a,
+  .mobile button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 44px;
+    padding: 8px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: #303030;
+    font: inherit;
+    text-decoration: none;
+    cursor: pointer;
+  }
+  .mobile a[aria-current="page"] {
+    background: #f1f1f1;
+    font-weight: 600;
+  }
+  .mobile a:focus-visible,
+  .mobile button:focus-visible {
+    outline: 2px solid #005bd3;
+    outline-offset: 2px;
+  }
+}

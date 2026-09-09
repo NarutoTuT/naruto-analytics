@@ -164,3 +164,14 @@ model BriefDelivery {
  sentAt DateTime?
  @@unique([shopId, date])
 }
+
+model LegalAcceptance {
+  id String @id @default(cuid())
+  shopDomain String
+  version String
+  documentHash String
+  actorUserId String
+  acceptedAt DateTime @default(now())
+  revokedAt DateTime?
+  @@unique([shopDomain, version])
+}

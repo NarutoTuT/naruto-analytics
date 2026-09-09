@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 const dir = await mkdtemp(join(tmpdir(), "naruto-tests-"));
 try {
-  for (const suite of ["core", "email-flows"]) {
+  for (const suite of (process.argv.slice(2).length ? process.argv.slice(2) : ["core", "email-flows", "agreement"])) {
     await build({
       entryPoints: [`tests/${suite}.test.ts`],
       bundle: true,
@@ -16,9 +16,16 @@ try {
         {
           name: "isolate-services",
           setup(b) {
+            if (suite === "agreement") {
+              b.onResolve({filter:/dpa\.server$/},()=>({path:"agreement-config",namespace:"agreement"}));
+              b.onLoad({filter:/.*/,namespace:"agreement"},()=>({contents:"export const dpaEnabled=()=>globalThis.legal.enabled;",loader:"js"}));
+            }
             if (suite === "email-flows") {
+              b.onResolve({filter:/job-health\.server$/},()=>({path:"job-health",namespace:"health"}));
+              b.onLoad({filter:/.*/,namespace:"health"},()=>({contents:"export const recordJobSuccess=async()=>{};",loader:"js"}));
               for (const [suffix, exports] of Object.entries({
                 "billing.server": ["requireSubscription", "getSubscription"],
+                "dpa.server": ["hasDpaAcceptance"],
                 "analytics.server": ["fetchAndComputeAnalytics"],
                 "email.server": ["sendDailyBrief"],
                 "shopify.server": ["unauthenticated"],
@@ -58,10 +65,14 @@ try {
             b.onLoad({ filter: /.*/, namespace: "test" }, (args) => ({
               contents:
                 args.path === "db"
-                  ? suite === "email-flows"
+                  ? suite === "agreement"
+                    ? "export default {legalAcceptance:{upsert:async (args)=>globalThis.legal.writes.push(args)}};"
+                    : suite === "email-flows"
                     ? "export default new Proxy({}, {get: (_, key) => globalThis.flow.db[key]});"
-                    : "export default {};"
-                  : 'export const authenticate = {admin(){throw new Error("Real authentication is unavailable in unit tests")}};',
+                    : 'export default {shop:{findUnique:async()=>({myshopifyDomain:"naruto-dev-ts8dqzla.myshopify.com"})}};'
+                  : suite === "agreement"
+                    ? 'export const authenticate = {admin:async()=>({session:{shop:"verified.myshopify.com"},sessionToken:{sub:globalThis.legal.actor},redirect:(url)=>new Response(null,{status:302,headers:{Location:url}})})};'
+                    : 'export const authenticate = {admin(){throw new Error("Real authentication is unavailable in unit tests")}};',
               loader: "js",
             }));
           },
@@ -74,6 +85,12 @@ try {
       { stdio: "inherit" },
     );
     if (result.status) process.exitCode = result.status;
+  }
+  if (!process.argv.slice(2).length) {
+  const extra = spawnSync(process.execPath, ["--test", "tests/operations.test.mjs", "tests/dependency.test.mjs"], {stdio:"inherit"});
+  if (extra.status) process.exitCode = extra.status;
+  const scope = spawnSync(process.execPath, ["scripts/test-test-store.mjs"], {stdio:"inherit"});
+  if (scope.status) process.exitCode = scope.status;
   }
 } finally {
   await rm(dir, { recursive: true, force: true });

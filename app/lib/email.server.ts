@@ -1,3 +1,4 @@
+import { requireTestShop } from "./test-store-policy.server";
 import { Resend } from "resend";
 import {
   buildDailyBriefHtml,
@@ -7,9 +8,7 @@ import {
 import type { AnalyticsData, PrioritizedIssue } from "./analytics.server";
 
 export type DailyBriefStatus =
-  | "all-clear"
-  | "needs-attention"
-  | "action-required";
+  "all-clear" | "needs-attention" | "action-required";
 
 function getResend(): Resend | null {
   const key = process.env.RESEND_API_KEY;
@@ -27,6 +26,7 @@ export async function sendDailyBrief(params: {
   appUrl?: string;
   idempotencyKey?: string;
 }): Promise<{ success: boolean; error?: string }> {
+  requireTestShop(params.storeDomain);
   const resend = getResend();
   if (!resend)
     return { success: false, error: "RESEND_API_KEY not configured" };

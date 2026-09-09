@@ -95,7 +95,7 @@ test("order and nested item pagination continue instead of silently truncating",
     async graphql(query: string) {
       if (query.includes("BriefShop"))
         return Response.json({
-          data: { shop: { currencyCode: "USD", ianaTimezone: "UTC" } },
+          data: { shop: { myshopifyDomain:"naruto-dev-ts8dqzla.myshopify.com", plan:{partnerDevelopment:true}, currencyCode: "USD", ianaTimezone: "UTC" } },
         });
       if (query.includes("BriefItems")) {
         itemPages++;
@@ -180,8 +180,8 @@ test("billing missing configuration fails closed", async () => {
 test("hosted billing URL accepts only Shopify shop domains", () => {
   process.env.SHOPIFY_APP_HANDLE = "naruto-ai";
   assert.match(
-    pricingUrl("demo.myshopify.com"),
-    /^https:\/\/admin.shopify.com\/store\/demo\/charges\/naruto-ai\/pricing_plans$/,
+    pricingUrl("naruto-dev-ts8dqzla.myshopify.com"),
+    /^https:\/\/admin.shopify.com\/store\/naruto-dev-ts8dqzla\/charges\/naruto-ai\/pricing_plans$/,
   );
   assert.throws(() => pricingUrl("evil.com"));
 });

@@ -4,7 +4,7 @@ import { action } from "../app/routes/api.test-email";
 import { loader as cron } from "../app/routes/api.cron.daily-brief";
 const shop = {
   id: "shop-test",
-  myshopifyDomain: "test.myshopify.com",
+  myshopifyDomain: "naruto-dev-ts8dqzla.myshopify.com",
   name: "Test",
 };
 const analytics = { prioritizedIssues: [] };
@@ -26,6 +26,7 @@ function setup() {
       session: { shop: shop.myshopifyDomain },
     }),
     getSubscription: async () => ({ active: true }),
+    hasDpaAcceptance: async () => true,
     admin: async () => ({ admin: {} }),
     fetchAndComputeAnalytics: async () => analytics,
     sendDailyBrief: async (p: any) => {
@@ -33,7 +34,7 @@ function setup() {
       return { success: true };
     },
     db: {
-      shop: { findUnique: async () => shop },
+      shop: { findUnique: async () => shop, findMany: async () => [{id:shop.id}] },
       notificationPreference: {
         findUnique: async () => pref,
         findMany: async () => (pref.dailyBrief ? [pref] : []),
@@ -224,4 +225,32 @@ test("authentication or subscription rejection cannot send or claim a slot", asy
     assert.equal(f.sent.length, 0);
     assert.equal(f.records.size, 0);
   }
+});
+
+
+test("revoked agreement blocks a cached delivery retry", async () => {
+  const f = setup();
+  f.flow.sendDailyBrief = async (p: any) => {
+    f.sent.push(p);
+    return { success: false };
+  };
+  await runCron();
+  assert.equal(f.sent.length, 1);
+  for (const r of f.records.values()) {
+    assert.ok(r.payloadJson);
+    r.claimedAt = new Date(Date.now() - 11 * 60000);
+  }
+  f.flow.hasDpaAcceptance = async () => false;
+  await runCron();
+  assert.equal(f.sent.length, 1);
+});
+
+test("agreement revoked during analytics retrieval prevents sending", async () => {
+  const f = setup();
+  f.flow.fetchAndComputeAnalytics = async () => {
+    f.flow.hasDpaAcceptance = async () => false;
+    return analytics;
+  };
+  await runCron();
+  assert.equal(f.sent.length, 0);
 });

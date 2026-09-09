@@ -1,3 +1,6 @@
+import db from "../db.server";
+import { requireTestShop } from "./test-store-policy.server";
+import { requireDpa } from "./dpa.server";
 import { authenticate } from "../shopify.server";
 import { ensureShop } from "./analytics.server";
 export const PLAN = {
@@ -27,13 +30,11 @@ export function hasEntitlement(
   // price.active describes the catalog price, not the merchant's entitlement;
   // existing contracts and development test prices can have active: false.
   return (
-    !!contract &&
-    contract.items.some(
-      (item) => item.handle === itemHandle,
-    )
+    !!contract && contract.items.some((item) => item.handle === itemHandle)
   );
 }
 export function pricingUrl(shop: string): string {
+  requireTestShop(shop);
   const handle = process.env.SHOPIFY_APP_HANDLE;
   if (
     !handle ||
@@ -48,6 +49,8 @@ export function pricingUrl(shop: string): string {
 export async function getSubscription(
   shopId: string,
 ): Promise<{ active: boolean; contract: Contract | null }> {
+  const tenant = await db.shop.findUnique({ where: { id: shopId } });
+  requireTestShop(tenant?.myshopifyDomain);
   const org = process.env.SHOPIFY_PARTNER_ORG_ID,
     token = process.env.SHOPIFY_PARTNER_API_TOKEN,
     appId = process.env.SHOPIFY_APP_GID,
@@ -95,6 +98,7 @@ export async function getSubscription(
 }
 export async function requireSubscription(request: Request, api = false) {
   const auth = await authenticate.admin(request);
+  await requireDpa(auth.session.shop, api);
   const shop = await ensureShop(auth.admin);
   const subscription = await getSubscription(shop.id);
   if (!subscription.active) {

@@ -1,3 +1,6 @@
+import { isTestShop, TEST_SHOPS } from "../lib/test-store-policy.server";
+import { recordJobSuccess } from "../lib/job-health.server";
+import { hasDpaAcceptance } from "../lib/dpa.server";
 import type { LoaderFunctionArgs } from "react-router";
 import prisma from "../db.server";
 import { unauthenticated } from "../shopify.server";
@@ -24,13 +27,20 @@ export async function loader({ request }: LoaderFunctionArgs) {
       where: { fulfilledAt: { lt: new Date(now.getTime() - 30 * 86400000) } },
     }),
   ]);
+  const allowedShops = await prisma.shop.findMany({
+    where: { myshopifyDomain: { in: [...TEST_SHOPS] } },
+    select: { id: true },
+  });
   let cursor: number | undefined;
   let processed = 0,
     failed = 0;
   // Bounded pages; pending shops are retried on the next invocation if execution times out.
   do {
     const prefs = await prisma.notificationPreference.findMany({
-      where: { dailyBrief: true },
+      where: {
+        dailyBrief: true,
+        shopId: { in: allowedShops.map((shop) => shop.id) },
+      },
       take: 25,
       orderBy: { id: "asc" },
       ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
@@ -47,8 +57,12 @@ export async function loader({ request }: LoaderFunctionArgs) {
         const shop = await prisma.shop.findUnique({
           where: { id: pref.shopId },
         });
-        if (!shop) continue;
+        if (!shop || !isTestShop(shop.myshopifyDomain)) continue;
+        // Check current development status even when retrying a frozen payload.
+        const { admin } = await unauthenticated.admin(shop.myshopifyDomain);
         if (!(await getSubscription(shop.id)).active) continue;
+        // Recheck consent on every attempt, including retries with a saved payload.
+        if (!(await hasDpaAcceptance(shop.myshopifyDomain))) continue;
         const id = `${shop.id}:${date}`;
         const delivery = await prisma.briefDelivery.upsert({
           where: { id },
@@ -76,8 +90,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
         let params: Parameters<typeof sendDailyBrief>[0];
         if (delivery.payloadJson) {
           params = JSON.parse(delivery.payloadJson);
+          if (params.storeDomain !== shop.myshopifyDomain) continue;
         } else {
-          const { admin } = await unauthenticated.admin(shop.myshopifyDomain);
           const analytics = await fetchAndComputeAnalytics(admin);
           params = {
             to: pref.email,
@@ -107,6 +121,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
           continue;
         }
         if (!(await getSubscription(shop.id)).active) continue;
+        if (!(await hasDpaAcceptance(shop.myshopifyDomain))) continue;
         const result = await sendDailyBrief(params);
         if (!result.success) {
           failed++;
@@ -130,5 +145,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
     }
     cursor = prefs.length === 25 ? prefs[prefs.length - 1].id : undefined;
   } while (cursor);
+  if (!failed) await recordJobSuccess(prisma);
   return Response.json({ processed, failed }, { status: failed ? 503 : 200 });
 }

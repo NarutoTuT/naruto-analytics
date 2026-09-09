@@ -1,3 +1,4 @@
+import type { HeadersFunction } from "react-router";
 import {
   Form,
   useLoaderData,
@@ -86,3 +87,5 @@ export default function Billing() {
 export function ErrorBoundary() {
   return boundary.error(useRouteError());
 }
+
+export const headers: HeadersFunction = (args) => boundary.headers(args);

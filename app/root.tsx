@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Links, Meta, Outlet, Scripts, ScrollRestoration } from "react-router";
 import type { LinksFunction } from "react-router";
 import { I18nextProvider } from "react-i18next";
@@ -9,6 +10,14 @@ export const links: LinksFunction = () => [
 ];
 
 export default function App() {
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("naruto-language");
+      if (saved === "en" || saved === "zh-CN") void i18n.changeLanguage(saved);
+    } catch {
+      /* Storage is optional; authentication never depends on it. */
+    }
+  }, []);
   return (
     <html lang={i18n.language}>
       <head>

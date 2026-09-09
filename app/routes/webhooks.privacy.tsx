@@ -1,3 +1,4 @@
+import { eraseShopData } from "../lib/privacy-deletion.server";
 import type { ActionFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
@@ -41,28 +42,15 @@ export async function action({ request }: ActionFunctionArgs) {
       });
       if (payload.customer?.id)
         await db.privacyRequest.deleteMany({
-          where: { shopDomain: shop, customerId: String(payload.customer.id) },
+          where: {
+            shopDomain: shop,
+            customerId: String(payload.customer.id),
+            fulfilledAt: { not: null },
+          },
         });
     }
   } else if (topic === "SHOP_REDACT") {
-    await db.$transaction([
-      db.session.deleteMany({ where: { shop } }),
-      db.privacyRequest.deleteMany({ where: { shopDomain: shop } }),
-      ...(record
-        ? [
-            db.briefDelivery.deleteMany({ where: { shopId: record.id } }),
-            db.analyticsEvent.deleteMany({ where: { shopId: record.id } }),
-            db.notificationPreference.deleteMany({
-              where: { shopId: record.id },
-            }),
-            db.analyticsReport.deleteMany({ where: { shopId: record.id } }),
-            db.analyticsSnapshot.deleteMany({ where: { shopId: record.id } }),
-            db.orderSnapshot.deleteMany({ where: { shopId: record.id } }),
-            db.productSnapshot.deleteMany({ where: { shopId: record.id } }),
-            db.shop.delete({ where: { id: record.id } }),
-          ]
-        : []),
-    ]);
+    await eraseShopData(db, shop);
   } else return new Response("Unsupported topic", { status: 400 });
   return new Response(null, { status: 200 });
 }
