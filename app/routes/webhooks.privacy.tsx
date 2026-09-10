@@ -1,9 +1,10 @@
 import { eraseShopData } from "../lib/privacy-deletion.server";
 import type { ActionFunctionArgs } from "react-router";
-import { authenticate } from "../shopify.server";
+import { authenticateSessionlessWebhook } from "../lib/shopify-webhook-auth.server";
 import db from "../db.server";
 export async function action({ request }: ActionFunctionArgs) {
-  const { shop, topic, payload } = await authenticate.webhook(request);
+  const { shop, topic, payload } =
+    await authenticateSessionlessWebhook(request);
   const record = await db.shop.findUnique({ where: { myshopifyDomain: shop } });
   if (topic === "CUSTOMERS_DATA_REQUEST") {
     const id = payload.data_request?.id;

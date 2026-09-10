@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { createHmac } from "node:crypto";
 import { restrictShopify } from "../app/lib/test-auth.server";
 import {
   TEST_SHOPS,
@@ -23,6 +24,46 @@ import { action as privacy } from "../app/routes/webhooks.privacy";
 import { DPA_VERSION, DPA_STATUS, DPA_SHA256 } from "../app/lib/dpa";
 const allowed = TEST_SHOPS[0],
   denied = "unapproved.myshopify.com";
+
+const webhookSecret = "synthetic-webhook-secret";
+function webhookRequest(topic: string, shop = denied, payload: any = {}) {
+  process.env.SHOPIFY_API_SECRET = webhookSecret;
+  const body = JSON.stringify(payload);
+  const hmac = createHmac("sha256", webhookSecret)
+    .update(body, "utf8")
+    .digest("base64");
+  return new Request(
+    `https://test.example/${topic === "app/uninstalled" ? "webhooks/app/uninstalled" : "webhooks/privacy"}`,
+    {
+      method: "POST",
+      body,
+      headers: {
+        "Content-Type": "application/json",
+        "X-Shopify-Topic": topic,
+        "X-Shopify-Shop-Domain": shop,
+        "X-Shopify-Hmac-SHA256": hmac,
+        "X-Shopify-API-Version": "2026-07",
+        "X-Shopify-Webhook-Id": "synthetic-webhook-id",
+      },
+    },
+  );
+}
+function forgedWebhookRequest(topic: string, shop = denied) {
+  process.env.SHOPIFY_API_SECRET = webhookSecret;
+  return new Request(
+    `https://test.example/${topic === "app/uninstalled" ? "webhooks/app/uninstalled" : "webhooks/privacy"}`,
+    {
+      method: "POST",
+      body: JSON.stringify({}),
+      headers: {
+        "Content-Type": "application/json",
+        "X-Shopify-Topic": topic,
+        "X-Shopify-Shop-Domain": shop,
+        "X-Shopify-Hmac-SHA256": "invalid-signature",
+      },
+    },
+  );
+}
 const token = (shop: string) =>
   "e30." +
   Buffer.from(JSON.stringify({ dest: `https://${shop}` })).toString(
@@ -107,6 +148,7 @@ function setup() {
       upsert: async (args: any) => calls.writes.push(args),
       findUnique: async () => null,
       updateMany: async (args: any) => (calls.revoked = args),
+      deleteMany: async () => ({ count: 0 }),
     },
     session: { deleteMany: async (args: any) => calls.deleted.push(args) },
     notificationPreference: {
@@ -349,10 +391,24 @@ test("wrong test-only version, missing formal enablement, wrong hash and origin 
   const s = setup();
   assert.equal((await consent()).status, 409);
   delete process.env.DPA_ACCEPTANCE_VERSION;
-  assert.equal((await consent({ version: DPA_VERSION, testOnly: "" })).status, 409);
+  assert.equal(
+    (await consent({ version: DPA_VERSION, testOnly: "" })).status,
+    409,
+  );
   process.env.DPA_ACCEPTANCE_VERSION = DPA_VERSION;
-  assert.equal((await consent({ version: DPA_VERSION, testOnly: "", hash: "old" })).status, 409);
-  assert.equal((await consent({ version: DPA_VERSION, testOnly: "" }, "https://attacker.test")).status, 403);
+  assert.equal(
+    (await consent({ version: DPA_VERSION, testOnly: "", hash: "old" })).status,
+    409,
+  );
+  assert.equal(
+    (
+      await consent(
+        { version: DPA_VERSION, testOnly: "" },
+        "https://attacker.test",
+      )
+    ).status,
+    403,
+  );
   assert.equal(s.calls.writes.length, 0);
 });
 test("published page uses formal version and does not expose TEST_ONLY mode", async () => {
@@ -367,11 +423,7 @@ test("published page uses formal version and does not expose TEST_ONLY mode", as
 });
 test("nonallowed uninstall still revokes sessions and acceptance without deleting requests", async () => {
   const s = setup();
-  await uninstall({
-    request: new Request("https://test.example/webhooks/app/uninstalled", {
-      method: "POST",
-    }),
-  } as any);
+  await uninstall({ request: webhookRequest("app/uninstalled") } as any);
   assert.deepEqual(s.calls.deleted, [{ where: { shop: denied } }]);
   assert.equal(s.calls.revoked.where.shopDomain, denied);
   assert.equal(s.calls.privacy.length, 0);
@@ -379,8 +431,9 @@ test("nonallowed uninstall still revokes sessions and acceptance without deletin
 test("nonallowed privacy webhook remains handled after SDK signature verification", async () => {
   const s = setup();
   await privacy({
-    request: new Request("https://test.example/webhooks/privacy", {
-      method: "POST",
+    request: webhookRequest("customers/data_request", denied, {
+      data_request: { id: 98765 },
+      orders_requested: [],
     }),
   } as any);
   assert.equal(s.calls.auth, 0);
@@ -388,18 +441,34 @@ test("nonallowed privacy webhook remains handled after SDK signature verificatio
 });
 test("invalid privacy webhook still fails authentication", async () => {
   const s = setup();
-  s.sdk.authenticate.webhook = async () => {
-    throw new Response(null, { status: 401 });
-  };
   await rejected(
-    privacy({
-      request: new Request("https://test.example/webhooks/privacy", {
-        method: "POST",
-      }),
-    } as any),
+    privacy({ request: forgedWebhookRequest("customers/data_request") } as any),
     401,
   );
   assert.equal(s.calls.privacy.length, 0);
+});
+test("valid signed uninstall does not call SDK webhook session refresh path", async () => {
+  const s = setup();
+  s.sdk.authenticate.webhook = async () => {
+    throw new Response(null, { status: 500 });
+  };
+  const response = await uninstall({
+    request: webhookRequest("app/uninstalled"),
+  } as any);
+  assert.equal(response.status, 200);
+  assert.deepEqual(s.calls.deleted, [{ where: { shop: denied } }]);
+});
+test("valid signed shop redaction handles missing shop records without SDK refresh", async () => {
+  const s = setup();
+  s.sdk.authenticate.webhook = async () => {
+    throw new Response(null, { status: 500 });
+  };
+  s.db.shop.findUnique = async () => null;
+  const response = await privacy({
+    request: webhookRequest("shop/redact"),
+  } as any);
+  assert.equal(response.status, 200);
+  assert.deepEqual(s.calls.deleted, [{ where: { shop: denied } }]);
 });
 
 import "@shopify/shopify-app-react-router/adapters/node";
@@ -494,15 +563,11 @@ test("shop erasure deletes business data but preserves unresolved request IDs an
 });
 test("customer erasure preserves pending privacy requests while keeping erasure handlers", async () => {
   const s = setup();
-  s.sdk.authenticate.webhook = async () => ({
-    shop: denied,
-    topic: "CUSTOMERS_REDACT",
-    payload: { customer: { id: 456 }, orders_to_redact: [] },
-  });
   s.db.orderSnapshot = { deleteMany: async () => ({ count: 0 }) };
   await privacy({
-    request: new Request("https://test.example/webhooks/privacy", {
-      method: "POST",
+    request: webhookRequest("customers/redact", denied, {
+      customer: { id: 456 },
+      orders_to_redact: [],
     }),
   } as any);
   assert.deepEqual(s.calls.privacy[0].where.fulfilledAt, { not: null });
