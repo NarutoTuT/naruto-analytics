@@ -320,35 +320,50 @@ function consent(
     }),
   } as any);
 }
-test("draft rehearsal writes only TEST_ONLY version and verified actor", async () => {
+test("published agreement writes only formal version and verified actor", async () => {
   const s = setup();
-  assert.equal(DPA_STATUS, "draft");
-  const response = await consent({ shop: denied, actor: "fake" });
+  process.env.DPA_ACCEPTANCE_VERSION = DPA_VERSION;
+  const response = await agreement({
+    request: new Request(`https://test.example/app/agreement?shop=${allowed}`, {
+      method: "POST",
+      headers: { Origin: "https://test.example" },
+      body: new URLSearchParams({
+        version: DPA_VERSION,
+        hash: DPA_SHA256,
+        accept: "yes",
+        shop: denied,
+        actor: "fake",
+      }),
+    }),
+  } as any);
   assert.equal(response.status, 302);
   assert.equal(s.calls.writes.length, 1);
   const row = s.calls.writes[0].create;
-  assert.equal(row.version, `TEST_ONLY:${DPA_VERSION}`);
+  assert.equal(row.version, DPA_VERSION);
   assert.equal(row.shopDomain, allowed);
   assert.equal(row.actorUserId, "synthetic-actor");
   assert.equal(row.documentHash, DPA_SHA256);
-  assert.notEqual(row.version, DPA_VERSION);
+  assert.notEqual(row.version, `TEST_ONLY:${DPA_VERSION}`);
 });
-test("draft formal version, missing test acknowledgement, wrong hash and origin write nothing", async () => {
+test("wrong test-only version, missing formal enablement, wrong hash and origin write nothing", async () => {
   const s = setup();
-  assert.equal((await consent({ version: DPA_VERSION })).status, 409);
-  assert.equal((await consent({ testOnly: "" })).status, 400);
-  assert.equal((await consent({ hash: "old" })).status, 409);
-  assert.equal((await consent({}, "https://attacker.test")).status, 403);
+  assert.equal((await consent()).status, 409);
+  delete process.env.DPA_ACCEPTANCE_VERSION;
+  assert.equal((await consent({ version: DPA_VERSION, testOnly: "" })).status, 409);
+  process.env.DPA_ACCEPTANCE_VERSION = DPA_VERSION;
+  assert.equal((await consent({ version: DPA_VERSION, testOnly: "", hash: "old" })).status, 409);
+  assert.equal((await consent({ version: DPA_VERSION, testOnly: "" }, "https://attacker.test")).status, 403);
   assert.equal(s.calls.writes.length, 0);
 });
-test("draft page explicitly identifies test mode and namespaced record", async () => {
+test("published page uses formal version and does not expose TEST_ONLY mode", async () => {
   setup();
+  process.env.DPA_ACCEPTANCE_VERSION = DPA_VERSION;
   const page = await agreementPage({
     request: request(allowed, "/app/agreement"),
   } as any);
-  assert.equal(page.enabled, false);
-  assert.equal(page.testMode, true);
-  assert.equal(page.version, testAgreementVersion(DPA_VERSION));
+  assert.equal(page.enabled, true);
+  assert.equal(page.testMode, false);
+  assert.equal(page.version, DPA_VERSION);
 });
 test("nonallowed uninstall still revokes sessions and acceptance without deleting requests", async () => {
   const s = setup();

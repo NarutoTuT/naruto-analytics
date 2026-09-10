@@ -36,3 +36,7 @@ database.sqlite
 
 # Restricted incident evidence; never publish
 /.private-security/
+
+# Signed/internal legal records; never commit or deploy
+docs/signing-package*/
+docs/signing-package-*.zip

@@ -2,3 +2,7 @@
 .env
 .env.*
 .git/
+
+# Signed/internal legal records; never commit or deploy
+docs/signing-package*/
+docs/signing-package-*.zip
