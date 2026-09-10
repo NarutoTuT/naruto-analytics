@@ -1,3 +1,5 @@
+import { hasReviewAdmission, reviewShops } from "./review-admission.server";
+import { canonicalShop, reviewConfig } from "./review-policy.server";
 // Temporary synthetic-data acceptance scope. Expanding this list requires a reviewed release.
 // This is an application tenant restriction, not a Shopify installation-region setting.
 export const TEST_SHOPS = Object.freeze(["naruto-dev-ts8dqzla.myshopify.com"]);
@@ -15,11 +17,11 @@ export function requireTestShop(shop: unknown): asserts shop is string {
       { status: 403, headers: { "Cache-Control": "no-store" } },
     );
 }
-export function requireDevelopmentShop(shop: {
+export async function requireDevelopmentShop(shop: {
   myshopifyDomain?: string;
   plan?: { partnerDevelopment?: boolean };
 }) {
-  requireTestShop(shop?.myshopifyDomain);
+  await requireStoreAdmission(shop?.myshopifyDomain);
   if (shop.plan?.partnerDevelopment !== true)
     throw Response.json(
       {
@@ -34,7 +36,7 @@ export function requireDevelopmentShop(shop: {
 export async function requireTestRequest(request: Request) {
   const url = new URL(request.url);
   const shops = url.searchParams.getAll("shop");
-  for (const shop of shops) requireTestShop(shop);
+  for (const shop of shops) requireAdmissionContext(shop);
   let context = shops.length > 0;
   const tokens = [...url.searchParams.getAll("id_token")];
   const authorization = request.headers.get("authorization");
@@ -61,13 +63,13 @@ export async function requireTestRequest(request: Request) {
     } catch {
       throw new Response("Invalid session context", { status: 401 });
     }
-    requireTestShop(shop);
+    requireAdmissionContext(shop);
     context = true;
   }
   if (request.method === "POST" && url.pathname === "/auth/login") {
     const form = await request.clone().formData();
     for (const shop of form.getAll("shop")) {
-      requireTestShop(shop);
+      requireAdmissionContext(shop);
       context = true;
     }
   }
@@ -79,4 +81,26 @@ export async function requireTestRequest(request: Request) {
 export const TEST_AGREEMENT_PREFIX = "TEST_ONLY:";
 export function testAgreementVersion(version: string) {
   return TEST_AGREEMENT_PREFIX + version;
+}
+
+export async function hasStoreAdmission(shop: unknown) {
+  return isTestShop(shop) || (await hasReviewAdmission(shop));
+}
+export async function requireStoreAdmission(shop: unknown) {
+  if (!(await hasStoreAdmission(shop)))
+    throw Response.json(
+      {
+        code: "REVIEW_ACCESS_REQUIRED",
+        error: "Approved test access is required.",
+      },
+      { status: 403, headers: { "Cache-Control": "no-store" } },
+    );
+}
+export async function admittedShops() {
+  return [...new Set([...TEST_SHOPS, ...(await reviewShops())])];
+}
+function requireAdmissionContext(shop: unknown) {
+  // This permits authentication only, never orders, reports, email or billing.
+  if (reviewConfig() && canonicalShop(shop)) return;
+  requireTestShop(shop);
 }

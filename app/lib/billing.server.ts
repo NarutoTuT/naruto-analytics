@@ -1,5 +1,8 @@
 import db from "../db.server";
-import { requireTestShop } from "./test-store-policy.server";
+import {
+  requireTestShop,
+  requireStoreAdmission,
+} from "./test-store-policy.server";
 import { requireDpa } from "./dpa.server";
 import { authenticate } from "../shopify.server";
 import { ensureShop } from "./analytics.server";
@@ -35,6 +38,13 @@ export function hasEntitlement(
 }
 export function pricingUrl(shop: string): string {
   requireTestShop(shop);
+  return nativePricingUrl(shop);
+}
+export async function admittedPricingUrl(shop: string) {
+  await requireStoreAdmission(shop);
+  return nativePricingUrl(shop);
+}
+function nativePricingUrl(shop: string) {
   const handle = process.env.SHOPIFY_APP_HANDLE;
   if (
     !handle ||
@@ -50,7 +60,7 @@ export async function getSubscription(
   shopId: string,
 ): Promise<{ active: boolean; contract: Contract | null }> {
   const tenant = await db.shop.findUnique({ where: { id: shopId } });
-  requireTestShop(tenant?.myshopifyDomain);
+  await requireStoreAdmission(tenant?.myshopifyDomain);
   const org = process.env.SHOPIFY_PARTNER_ORG_ID,
     token = process.env.SHOPIFY_PARTNER_API_TOKEN,
     appId = process.env.SHOPIFY_APP_GID,

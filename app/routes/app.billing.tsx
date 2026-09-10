@@ -11,7 +11,7 @@ import { Page, Card, BlockStack, Text, Button, Banner } from "@shopify/polaris";
 import { useTranslation } from "react-i18next";
 import { authenticate } from "../shopify.server";
 import { ensureShop } from "../lib/analytics.server";
-import { getSubscription, pricingUrl } from "../lib/billing.server";
+import { getSubscription, admittedPricingUrl } from "../lib/billing.server";
 export async function loader({ request }: LoaderFunctionArgs) {
   const { admin } = await authenticate.admin(request);
   const shop = await ensureShop(admin);
@@ -19,7 +19,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 }
 export async function action({ request }: ActionFunctionArgs) {
   const { session, redirect } = await authenticate.admin(request);
-  return redirect(pricingUrl(session.shop), { target: "_top" });
+  return redirect(await admittedPricingUrl(session.shop), { target: "_top" });
 }
 export default function Billing() {
   const { active, contract } = useLoaderData<typeof loader>();

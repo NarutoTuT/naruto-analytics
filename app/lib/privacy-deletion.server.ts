@@ -7,6 +7,13 @@ export async function eraseShopData(db: PrismaClient, shopDomain: string) {
   await db.$transaction([
     db.session.deleteMany({ where: { shop: shopDomain } }),
     db.legalAcceptance.deleteMany({ where: { shopDomain } }),
+    // Review grants use the canonical domain, including before a Shop row exists.
+    db.analyticsEvent.deleteMany({
+      where: {
+        shopId: shopDomain,
+        event: { in: ["review_admission", "review_revoked"] },
+      },
+    }),
     // Keep unresolved request records for follow-up; erasure is not fulfillment.
     db.privacyRequest.deleteMany({
       where: { shopDomain, fulfilledAt: { not: null } },

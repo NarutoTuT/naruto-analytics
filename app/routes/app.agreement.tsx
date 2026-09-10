@@ -15,13 +15,11 @@ import { authenticate } from "../shopify.server";
 import db from "../db.server";
 import { DPA_VERSION, DPA_SHA256, AGREEMENT_TEXT } from "../lib/dpa";
 import { dpaEnabled, dpaTestEnabled } from "../lib/dpa.server";
-import {
-  testAgreementVersion,
-} from "../lib/test-store-policy.server";
+import { testAgreementVersion } from "../lib/test-store-policy.server";
 export async function loader({ request }: LoaderFunctionArgs) {
   const { session } = await authenticate.admin(request);
   const enabled = dpaEnabled();
-  const testMode = dpaTestEnabled(session.shop);
+  const testMode = await dpaTestEnabled(session.shop);
   const recordVersion = testMode
     ? testAgreementVersion(DPA_VERSION)
     : DPA_VERSION;
@@ -51,7 +49,7 @@ export async function action({ request }: ActionFunctionArgs) {
   const auth = await authenticate.admin(request);
   if (request.method !== "POST")
     return Response.json({ error: "Method not allowed" }, { status: 405 });
-  const testMode = dpaTestEnabled(auth.session.shop);
+  const testMode = await dpaTestEnabled(auth.session.shop);
   const recordVersion = testMode
     ? testAgreementVersion(DPA_VERSION)
     : DPA_VERSION;

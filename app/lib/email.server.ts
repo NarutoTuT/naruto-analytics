@@ -1,4 +1,4 @@
-import { requireTestShop } from "./test-store-policy.server";
+import { requireStoreAdmission } from "./test-store-policy.server";
 import { Resend } from "resend";
 import {
   buildDailyBriefHtml,
@@ -26,7 +26,7 @@ export async function sendDailyBrief(params: {
   appUrl?: string;
   idempotencyKey?: string;
 }): Promise<{ success: boolean; error?: string }> {
-  requireTestShop(params.storeDomain);
+  await requireStoreAdmission(params.storeDomain);
   const resend = getResend();
   if (!resend)
     return { success: false, error: "RESEND_API_KEY not configured" };

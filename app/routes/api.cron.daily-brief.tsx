@@ -1,4 +1,7 @@
-import { isTestShop, TEST_SHOPS } from "../lib/test-store-policy.server";
+import {
+  hasStoreAdmission,
+  admittedShops,
+} from "../lib/test-store-policy.server";
 import { recordJobSuccess } from "../lib/job-health.server";
 import { hasDpaAcceptance } from "../lib/dpa.server";
 import type { LoaderFunctionArgs } from "react-router";
@@ -28,7 +31,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     }),
   ]);
   const allowedShops = await prisma.shop.findMany({
-    where: { myshopifyDomain: { in: [...TEST_SHOPS] } },
+    where: { myshopifyDomain: { in: await admittedShops() } },
     select: { id: true },
   });
   let cursor: number | undefined;
@@ -57,7 +60,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         const shop = await prisma.shop.findUnique({
           where: { id: pref.shopId },
         });
-        if (!shop || !isTestShop(shop.myshopifyDomain)) continue;
+        if (!shop || !(await hasStoreAdmission(shop.myshopifyDomain))) continue;
         // Check current development status even when retrying a frozen payload.
         const { admin } = await unauthenticated.admin(shop.myshopifyDomain);
         if (!(await getSubscription(shop.id)).active) continue;
