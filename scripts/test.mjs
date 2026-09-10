@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 const dir = await mkdtemp(join(tmpdir(), "naruto-tests-"));
 try {
-  for (const suite of (process.argv.slice(2).length ? process.argv.slice(2) : ["core", "email-flows", "agreement"])) {
+  for (const suite of (process.argv.slice(2).length ? process.argv.slice(2) : ["core", "email-flows", "agreement", "dpa-gate"])) {
     await build({
       entryPoints: [`tests/${suite}.test.ts`],
       bundle: true,
@@ -16,9 +16,13 @@ try {
         {
           name: "isolate-services",
           setup(b) {
+            if (suite === "dpa-gate") {
+              b.onResolve({filter:/\/dpa$/},()=>({path:"gate-config",namespace:"gate"}));
+              b.onLoad({filter:/.*/,namespace:"gate"},()=>({contents:'export const DPA_VERSION="fixture-v1", DPA_SHA256="fixture-hash"; export let DPA_STATUS="published"; export function setStatus(value){DPA_STATUS=value}',loader:"js"}));
+            }
             if (suite === "agreement") {
               b.onResolve({filter:/dpa\.server$/},()=>({path:"agreement-config",namespace:"agreement"}));
-              b.onLoad({filter:/.*/,namespace:"agreement"},()=>({contents:"export const dpaEnabled=()=>globalThis.legal.enabled;",loader:"js"}));
+              b.onLoad({filter:/.*/,namespace:"agreement"},()=>({contents:"export const dpaEnabled=()=>globalThis.legal.enabled; export const dpaTestEnabled=()=>false;",loader:"js"}));
             }
             if (suite === "email-flows") {
               b.onResolve({filter:/job-health\.server$/},()=>({path:"job-health",namespace:"health"}));
@@ -65,7 +69,9 @@ try {
             b.onLoad({ filter: /.*/, namespace: "test" }, (args) => ({
               contents:
                 args.path === "db"
-                  ? suite === "agreement"
+                  ? suite === "dpa-gate"
+                    ? "export default {legalAcceptance:{findUnique:async(args)=>globalThis.gate.find(args)}};"
+                    : suite === "agreement"
                     ? "export default {legalAcceptance:{upsert:async (args)=>globalThis.legal.writes.push(args)}};"
                     : suite === "email-flows"
                     ? "export default new Proxy({}, {get: (_, key) => globalThis.flow.db[key]});"

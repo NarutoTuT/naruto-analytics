@@ -137,7 +137,7 @@ function setup() {
   const guarded = restrictShopify(sdk);
   (globalThis as any).scope = { calls, shop, admin, sdk, guarded, db };
   process.env.SHOPIFY_APP_URL = "https://test.example";
-  delete process.env.DPA_ACCEPTANCE_VERSION;
+  process.env.DPA_ACCEPTANCE_VERSION = testAgreementVersion(DPA_VERSION);
   return { calls, shop, admin, sdk, guarded, db };
 }
 for (const path of [
@@ -487,4 +487,12 @@ test("customer erasure preserves pending privacy requests while keeping erasure 
     }),
   } as any);
   assert.deepEqual(s.calls.privacy[0].where.fulfilledAt, { not: null });
+});
+
+test("unconfigured draft cannot accept rehearsal or business consent", async () => {
+ const s=setup(); delete process.env.DPA_ACCEPTANCE_VERSION;
+ assert.equal((await consent()).status,409);
+ assert.equal(s.calls.writes.length,0);
+ const page=await agreementPage({request:request(allowed,"/app/agreement")} as any);
+ assert.equal(page.testMode,false);
 });
