@@ -691,17 +691,22 @@ test("new review store can authenticate to admission only; APIs deny before orde
   );
   assert.equal(s.calls.orders, 0);
 });
-test("review mode preserves SDK failure and non-development denial", async () => {
+test("review mode preserves SDK failure and lets reviewers reach the code gate on non-development stores", async () => {
   let s = reviewSetup();
   s.sdk.authenticate.admin = async () => {
     throw new Response(null, { status: 401 });
   };
   await rejected(submitReview(s.shop.myshopifyDomain), 401);
   assert.equal(s.calls.graphql, 0);
+
   s = reviewSetup();
   s.shop.plan.partnerDevelopment = false;
-  await rejected(submitReview(s.shop.myshopifyDomain));
-  assert.equal(s.rows.size, 0);
+  const page = await reviewPage({
+    request: request(s.shop.myshopifyDomain, "/app/review"),
+  } as any);
+  assert.equal(page.enabled, true);
+  assert.equal(page.admitted, false);
+  assert.equal(s.calls.graphql, 0);
   assert.equal(s.calls.orders, 0);
 });
 test("review form rejects foreign origin, invalid code and missing synthetic acknowledgement", async () => {

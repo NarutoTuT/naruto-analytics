@@ -41,8 +41,10 @@ export function restrictShopify<
       admin: async (request: Request) => {
         await requireTestRequest(request);
         const context = await sdk.authenticate.admin(request);
-        if (!reviewConfig()) requireTestShop(context.session.shop);
-        await verifyDevelopment(context.admin, context.session.shop);
+        const review = reviewConfig();
+        if (!review) requireTestShop(context.session.shop);
+        if (!review || !hasStoreAdmission(context.session.shop))
+          await verifyDevelopment(context.admin, context.session.shop);
         const path = new URL(request.url).pathname;
         if (
           !/^\/app\/review(?:\.data)?$/.test(path) &&
