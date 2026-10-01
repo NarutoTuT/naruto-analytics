@@ -1,5 +1,7 @@
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 export const REVIEW_EVENT = "review_admission";
+const MAX_REVIEW_WINDOW_MS = 45 * 86400000;
+const HUMAN_REVIEW_CODE = /^[A-HJ-NP-Z2-9]{4}(?:-[A-HJ-NP-Z2-9]{4}){3}$/;
 export function canonicalShop(value: unknown): value is string {
   return (
     typeof value === "string" &&
@@ -18,7 +20,7 @@ export function reviewConfig(now = Date.now()) {
     !Number.isFinite(start) ||
     !Number.isFinite(end) ||
     end <= start ||
-    end - start > 7 * 86400000 ||
+    end - start > MAX_REVIEW_WINDOW_MS ||
     now < start ||
     now >= end
   )
@@ -31,12 +33,21 @@ export function reviewConfig(now = Date.now()) {
     end,
   };
 }
+export function normalizeReviewCode(value: unknown) {
+  if (typeof value !== "string") return null;
+  const code = value.trim();
+  if (/^[a-fA-F0-9]{64}$/.test(code)) return code.toLowerCase();
+  const humanCode = code.toUpperCase();
+  return HUMAN_REVIEW_CODE.test(humanCode) ? humanCode : null;
+}
+export function hashReviewCode(value: unknown) {
+  const code = normalizeReviewCode(value);
+  return code ? createHash("sha256").update(code).digest("hex") : null;
+}
 export function codeMatches(code: unknown, expected: string) {
-  if (typeof code !== "string" || !/^[a-f0-9]{64}$/.test(code)) return false;
-  return timingSafeEqual(
-    Buffer.from(createHash("sha256").update(code).digest("hex")),
-    Buffer.from(expected),
-  );
+  const actual = hashReviewCode(code);
+  if (!actual || !/^[a-f0-9]{64}$/.test(expected)) return false;
+  return timingSafeEqual(Buffer.from(actual), Buffer.from(expected));
 }
 export type ReviewGrant = {
   shop: string;

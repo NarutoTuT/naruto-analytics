@@ -22,14 +22,25 @@ export async function action({ request }: ActionFunctionArgs) {
   )
     return data({ error: "Invalid origin" }, { status: 403 });
   const form = await request.formData();
-  if (
-    form.get("synthetic") !== "yes" ||
-    !(await admitReviewShop(
-      auth.session.shop,
-      String(auth.sessionToken?.sub || ""),
-      form.get("code"),
-    ))
-  )
+  if (form.get("synthetic") !== "yes") {
+    console.info("Review access denied", {
+      reason: "synthetic_ack_missing",
+    });
+    return data(
+      {
+        error:
+          "Review access unavailable. Check the code or contact the developer.",
+      },
+      { status: 403, headers: { "Cache-Control": "no-store" } },
+    );
+  }
+  const actor = String(
+    auth.sessionToken?.sub ||
+      auth.session.onlineAccessInfo?.associated_user?.id ||
+      auth.session.id ||
+      "",
+  );
+  if (!(await admitReviewShop(auth.session.shop, actor, form.get("code"))))
     return data(
       {
         error:
@@ -69,6 +80,8 @@ export default function Review() {
               }}
               type="password"
               autoComplete="off"
+              autoCapitalize="characters"
+              spellCheck={false}
               required
               maxLength={64}
             />

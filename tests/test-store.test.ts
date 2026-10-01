@@ -589,6 +589,7 @@ import {
   reviewConfig,
   readGrant,
   encodeGrant,
+  hashReviewCode,
   reviewKey,
 } from "../app/lib/review-policy.server";
 import {
@@ -629,6 +630,12 @@ function reviewSetup() {
   };
   s.db.analyticsEvent.findMany = async (a: any) =>
     [...rows.values()].filter((x) => x.event === a.where.event);
+  s.db.analyticsEvent.updateMany = async (a: any) => {
+    const row = rows.get(a.where.dedupeKey);
+    if (!row || row.event !== a.where.event) return { count: 0 };
+    Object.assign(row, a.data);
+    return { count: 1 };
+  };
   s.db.analyticsEvent.upsert = async (a: any) => {
     const row = rows.has(a.where.dedupeKey)
       ? { ...rows.get(a.where.dedupeKey), ...a.update }
@@ -655,15 +662,19 @@ function submitReview(
     }),
   } as any);
 }
-test("review configuration is closed when disabled, incomplete, too long or expired", () => {
+test("review configuration supports a review cycle and closes on invalid or excessive windows", () => {
   reviewSetup();
+  assert.ok(reviewConfig());
+  process.env.REVIEW_END_AT = new Date(
+    Date.now() + 30 * 86400000,
+  ).toISOString();
   assert.ok(reviewConfig());
   for (const [key, value] of [
     ["REVIEW_ACCESS_ENABLED", "false"],
     ["REVIEW_CODE_SHA256", "bad"],
     ["REVIEW_SIGNING_KEY", "short"],
     ["REVIEW_START_AT", "invalid"],
-    ["REVIEW_END_AT", new Date(Date.now() + 9 * 86400000).toISOString()],
+    ["REVIEW_END_AT", new Date(Date.now() + 46 * 86400000).toISOString()],
     ["REVIEW_END_AT", new Date(Date.now() - 2000).toISOString()],
   ]) {
     const old = process.env[key];
@@ -671,6 +682,21 @@ test("review configuration is closed when disabled, incomplete, too long or expi
     assert.equal(reviewConfig(), null);
     process.env[key] = old;
   }
+});
+test("review codes accept human-safe formatting while preserving legacy credentials", () => {
+  reviewSetup();
+  const human = "ABCD-EFGH-JKLM-NPQR";
+  process.env.REVIEW_CODE_SHA256 = hashReviewCode(human)!;
+  assert.ok(reviewConfig());
+  assert.equal(
+    hashReviewCode(`  ${human.toLowerCase()}  `),
+    hashReviewCode(human),
+  );
+  assert.equal(hashReviewCode("ABCD-EFGH-IJKL-MNOP"), null);
+  assert.equal(
+    hashReviewCode(reviewCode.toUpperCase()),
+    hashReviewCode(reviewCode),
+  );
 });
 test("new review store can authenticate to admission only; APIs deny before orders", async () => {
   const s = reviewSetup();
@@ -736,6 +762,22 @@ test("admission binds verified store and actor, lasts at most 48h, and is not a 
   assert.equal(s.calls.writes.length, 0);
   assert.equal(s.calls.orders, 0);
 });
+test("admission uses the authenticated Shopify session when a token payload is absent", async () => {
+  const s = reviewSetup();
+  s.sdk.authenticate.admin = async () => ({
+    admin: s.admin,
+    session: { shop: s.shop.myshopifyDomain, id: "authenticated-session-id" },
+    redirect: (url: string) =>
+      new Response(null, { status: 302, headers: { Location: url } }),
+  });
+  const response = await submitReview(s.shop.myshopifyDomain);
+  assert.equal((response as Response).status, 302);
+  const row = s.rows.get(reviewKey(s.shop.myshopifyDomain));
+  assert.equal(
+    readGrant(row.data, s.shop.myshopifyDomain)?.actor,
+    "authenticated-session-id",
+  );
+});
 test("admitted store proceeds through authenticated business and offline paths", async () => {
   const s = reviewSetup();
   await submitReview(s.shop.myshopifyDomain);
@@ -764,7 +806,7 @@ test("grant rejects cross-shop, tampering, wrong campaign and exact expiry", asy
   process.env.REVIEW_CAMPAIGN = "changed_campaign";
   assert.equal(await hasReviewAdmission(s.shop.myshopifyDomain), false);
 });
-test("resubmitting cannot extend grant or renew an expired grant", async () => {
+test("resubmitting keeps a live grant stable and safely renews an expired admission", async () => {
   const s = reviewSetup();
   await submitReview(s.shop.myshopifyDomain);
   const row = s.rows.get(reviewKey(s.shop.myshopifyDomain));
@@ -784,8 +826,12 @@ test("resubmitting cannot extend grant or renew an expired grant", async () => {
   );
   assert.equal(
     await admitReviewShop(s.shop.myshopifyDomain, "actor", reviewCode),
-    false,
+    true,
   );
+  const renewed = readGrant(row.data, s.shop.myshopifyDomain)!;
+  assert.equal(renewed.actor, "actor");
+  assert.ok(renewed.expires > Date.now());
+  assert.ok(renewed.expires - renewed.issued <= 48 * 3600000);
 });
 test("revocation blocks API, orders, history, billing, email and offline auth; keeps original store", async () => {
   const s = reviewSetup();

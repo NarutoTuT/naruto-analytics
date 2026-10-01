@@ -32,14 +32,32 @@ export async function admitReviewShop(
   code: unknown,
 ) {
   const c = reviewConfig();
-  if (!c || !canonicalShop(shop) || !actor || !codeMatches(code, c.codeHash))
+  if (!c) {
+    console.info("Review access denied", { reason: "config_invalid" });
     return false;
+  }
+  if (!canonicalShop(shop)) {
+    console.info("Review access denied", { reason: "shop_invalid" });
+    return false;
+  }
+  if (!actor) {
+    console.info("Review access denied", { reason: "actor_missing" });
+    return false;
+  }
+  if (!codeMatches(code, c.codeHash)) {
+    console.info("Review access denied", { reason: "code_mismatch" });
+    return false;
+  }
   const key = reviewKey(shop),
     now = Date.now();
   const old = await db.analyticsEvent.findUnique({ where: { dedupeKey: key } });
   if (old) {
-    // Revocation and expiry never renew through resubmitting the same review code.
-    return old.event === REVIEW_EVENT && !!readGrant(old.data, shop);
+    // A valid grant is stable. Revocation or an unexpected event always wins.
+    if (old.event !== REVIEW_EVENT) {
+      console.info("Review access denied", { reason: "revoked" });
+      return false;
+    }
+    if (readGrant(old.data, shop)) return true;
   }
   const data = encodeGrant(
     {
@@ -51,6 +69,15 @@ export async function admitReviewShop(
     },
     c.key,
   );
+  if (old) {
+    // Renew only an expired admission. The event predicate prevents a concurrent
+    // revocation tombstone from being overwritten.
+    const renewed = await db.analyticsEvent.updateMany({
+      where: { dedupeKey: key, event: REVIEW_EVENT },
+      data: { data },
+    });
+    return renewed.count === 1;
+  }
   try {
     await db.analyticsEvent.create({
       data: { shopId: shop, event: REVIEW_EVENT, dedupeKey: key, data },
@@ -58,7 +85,12 @@ export async function admitReviewShop(
     return true;
   } catch (error) {
     if ((error as { code?: string }).code !== "P2002") throw error;
-    return hasReviewAdmission(shop);
+    const concurrent = await db.analyticsEvent.findUnique({
+      where: { dedupeKey: key },
+    });
+    return (
+      concurrent?.event === REVIEW_EVENT && !!readGrant(concurrent.data, shop)
+    );
   }
 }
 export async function revokeReviewShop(shop: string) {
