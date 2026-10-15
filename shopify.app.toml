@@ -2,7 +2,7 @@
 
 client_id = "d68250b2098d95f0b840de5d3814707a"
 name = "Naruto Analytics"
-application_url = "https://naruto-analytics.vercel.app"
+application_url = "https://naruto-analytics-staging.vercel.app"
 embedded = true
 
 [build]
@@ -25,9 +25,9 @@ scopes = "read_orders"
 
 [auth]
 redirect_urls = [
-  "https://naruto-analytics.vercel.app/auth",
-  "https://naruto-analytics.vercel.app/auth/callback",
-  "https://naruto-analytics.vercel.app/api/auth/callback",
+  "https://naruto-analytics-staging.vercel.app/auth",
+  "https://naruto-analytics-staging.vercel.app/auth/callback",
+  "https://naruto-analytics-staging.vercel.app/api/auth/callback",
 ]
 
 [[webhooks.subscriptions]]

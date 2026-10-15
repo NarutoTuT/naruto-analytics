@@ -5,7 +5,7 @@ Naruto AI 是面向 Shopify 商家的 AI 每日经营简报 App。它不是分�
 ## 项目信息
 
 - 仓库：`git@github.com:NarutoTuT/naruto-analytics.git`
-- 生产环境：`https://naruto-analytics.vercel.app`
+- 正式 App URL：`https://naruto-analytics-staging.vercel.app`
 - 技术栈：React Router v7 + Vite + Shopify Polaris + Prisma + PostgreSQL + Resend
 - 数据库：Neon PostgreSQL
 

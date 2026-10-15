@@ -5,12 +5,18 @@ import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 const dir = await mkdtemp(join(tmpdir(), "naruto-tests-"));
 try {
-  for (const suite of (process.argv.slice(2).length ? process.argv.slice(2) : ["core", "email-flows", "agreement", "dpa-gate"])) {
+  for (const suite of (process.argv.slice(2).length ? process.argv.slice(2) : ["core", "email-flows", "agreement", "dpa-gate", "app-not-found"])) {
     await build({
       entryPoints: [`tests/${suite}.test.ts`],
       bundle: true,
       platform: "node",
       format: "esm",
+      banner:
+        suite === "app-not-found"
+          ? {
+              js: 'import { createRequire } from "node:module"; const require = createRequire(import.meta.url);',
+            }
+          : undefined,
       outfile: join(dir, `${suite}.mjs`),
       plugins: [
         {
@@ -57,6 +63,20 @@ try {
                   }),
                 );
               }
+            }
+            if (suite === "app-not-found") {
+              b.onResolve({ filter: /shopify\.server$/ }, () => ({
+                path: "shopify",
+                namespace: "not-found",
+              }));
+              b.onLoad(
+                { filter: /.*/, namespace: "not-found" },
+                () => ({
+                  contents:
+                    "export const authenticate={admin:async(request)=>{globalThis.notFoundAuth.requests.push(request);if(globalThis.notFoundAuth.error)throw globalThis.notFoundAuth.error;return {};}};",
+                  loader: "js",
+                }),
+              );
             }
             b.onResolve({ filter: /db\.server$/ }, () => ({
               path: "db",
