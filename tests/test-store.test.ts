@@ -984,7 +984,10 @@ test("review screen renders closed, credential and admitted states without expos
     const html = renderToString(createElement(RouterProvider, { router }));
     router.dispose();
     if (!state.enabled) assert.match(html, /currently closed/);
-    else if (state.admitted) assert.match(html, /Continue to the agreement/);
+    else if (state.admitted) {
+      assert.match(html, /Continue to the agreement/);
+      assert.match(html, /data-discover="true"/);
+    }
     else {
       assert.match(html, /type="password"/);
       assert.match(html, /synthetic test data only/);

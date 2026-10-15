@@ -1,5 +1,5 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
-import { Form, useActionData, useLoaderData, data } from "react-router";
+import { Form, Link, useActionData, useLoaderData, data } from "react-router";
 import { authenticate } from "../shopify.server";
 import {
   admitReviewShop,
@@ -67,7 +67,7 @@ export default function Review() {
       {!enabled ? (
         <p>Review access is currently closed.</p>
       ) : admitted ? (
-        <a href="/app/agreement">Continue to the agreement</a>
+        <Link to="/app/agreement">Continue to the agreement</Link>
       ) : (
         <Form method="post" style={{ display: "grid", gap: 16, marginTop: 24 }}>
           <label>
