@@ -735,15 +735,21 @@ test("review mode preserves SDK failure and lets reviewers reach the code gate o
   assert.equal(s.calls.graphql, 0);
   assert.equal(s.calls.orders, 0);
 });
-test("review form rejects foreign origin, invalid code and missing synthetic acknowledgement", async () => {
+test("review form blocks foreign origin and lets reviewers retry recoverable input errors", async () => {
   const s = reviewSetup();
-  for (const [values, origin] of [
-    [{}, "https://attacker.test"],
-    [{ code: "b".repeat(64) }, "https://test.example"],
-    [{ synthetic: "" }, "https://test.example"],
-  ] as [Record<string, string>, string][]) {
-    const res = await submitReview(s.shop.myshopifyDomain, values, origin);
-    assert.equal((res as any).init.status, 403);
+  const foreign = await submitReview(
+    s.shop.myshopifyDomain,
+    {},
+    "https://attacker.test",
+  );
+  assert.equal((foreign as any).init.status, 403);
+  for (const values of [
+    { code: "b".repeat(64) },
+    { synthetic: "" },
+  ] as Record<string, string>[]) {
+    const res = await submitReview(s.shop.myshopifyDomain, values);
+    assert.equal((res as any).init.status, 200);
+    assert.match((res as any).data.error, /review|synthetic/i);
   }
   assert.equal(s.rows.size, 0);
 });

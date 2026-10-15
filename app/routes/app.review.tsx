@@ -22,16 +22,23 @@ export async function action({ request }: ActionFunctionArgs) {
   )
     return data({ error: "Invalid origin" }, { status: 403 });
   const form = await request.formData();
+  const retry = (error: string) =>
+    data(
+      { error },
+      { status: 200, headers: { "Cache-Control": "no-store" } },
+    );
+  if (!reviewConfig()) {
+    console.info("Review access denied", { reason: "config_invalid" });
+    return retry(
+      "Review access is temporarily unavailable. Contact the developer for a renewed review window.",
+    );
+  }
   if (form.get("synthetic") !== "yes") {
     console.info("Review access denied", {
       reason: "synthetic_ack_missing",
     });
-    return data(
-      {
-        error:
-          "Review access unavailable. Check the code or contact the developer.",
-      },
-      { status: 403, headers: { "Cache-Control": "no-store" } },
+    return retry(
+      "Confirm that this development store contains synthetic test data only.",
     );
   }
   const actor = String(
@@ -41,12 +48,8 @@ export async function action({ request }: ActionFunctionArgs) {
       "",
   );
   if (!(await admitReviewShop(auth.session.shop, actor, form.get("code"))))
-    return data(
-      {
-        error:
-          "Review access unavailable. Check the code or contact the developer.",
-      },
-      { status: 403, headers: { "Cache-Control": "no-store" } },
+    return retry(
+      "The review access code could not be accepted. Re-enter the current code from the Shopify testing instructions or contact the developer.",
     );
   return auth.redirect("/app/agreement");
 }
