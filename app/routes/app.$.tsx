@@ -1,10 +1,10 @@
 import type { LoaderFunctionArgs } from "react-router";
-import { Link, data } from "react-router";
+import { Link } from "react-router";
 import { authenticate } from "../shopify.server";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   await authenticate.admin(request);
-  return data(null, { status: 404 });
+  return null;
 }
 
 export default function UnknownAppPage() {

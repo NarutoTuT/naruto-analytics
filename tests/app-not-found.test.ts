@@ -11,13 +11,13 @@ test.beforeEach(() => {
   globalThis.notFoundAuth = { requests: [] };
 });
 
-test("unknown app paths authenticate before returning 404", async () => {
+test("unknown app paths authenticate before rendering the fallback", async () => {
   const request = new Request("https://example.test/app/missing");
   const result = await loader({ request, params: {}, context: {} } as never);
 
   assert.equal(globalThis.notFoundAuth.requests.length, 1);
   assert.equal(globalThis.notFoundAuth.requests[0], request);
-  assert.equal(result.init?.status, 404);
+  assert.equal(result, null);
 });
 
 test("unknown app page is friendly and links back to Today", () => {
