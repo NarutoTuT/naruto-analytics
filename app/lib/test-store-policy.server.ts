@@ -36,7 +36,7 @@ export async function requireDevelopmentShop(shop: {
 export async function requireTestRequest(request: Request) {
   const url = new URL(request.url);
   const shops = url.searchParams.getAll("shop");
-  for (const shop of shops) requireAdmissionContext(shop);
+  for (const shop of shops) requireAdmissionContext(shop, url.pathname);
   let context = shops.length > 0;
   const tokens = [...url.searchParams.getAll("id_token")];
   const authorization = request.headers.get("authorization");
@@ -63,13 +63,13 @@ export async function requireTestRequest(request: Request) {
     } catch {
       throw new Response("Invalid session context", { status: 401 });
     }
-    requireAdmissionContext(shop);
+    requireAdmissionContext(shop, url.pathname);
     context = true;
   }
   if (request.method === "POST" && url.pathname === "/auth/login") {
     const form = await request.clone().formData();
     for (const shop of form.getAll("shop")) {
-      requireAdmissionContext(shop);
+      requireAdmissionContext(shop, url.pathname);
       context = true;
     }
   }
@@ -99,8 +99,16 @@ export async function requireStoreAdmission(shop: unknown) {
 export async function admittedShops() {
   return [...new Set([...TEST_SHOPS, ...(await reviewShops())])];
 }
-function requireAdmissionContext(shop: unknown) {
+function requireAdmissionContext(shop: unknown, path: string) {
   // This permits authentication only, never orders, reports, email or billing.
   if (reviewConfig() && canonicalShop(shop)) return;
+  // An expired review window must not turn a previously issued agreement link
+  // into a raw framework 403. Permit Shopify SDK authentication only for the
+  // two review UI routes; the authenticated guard still blocks business data.
+  if (
+    canonicalShop(shop) &&
+    /^\/app\/(?:review|agreement)(?:\.data)?$/.test(path)
+  )
+    return;
   requireTestShop(shop);
 }

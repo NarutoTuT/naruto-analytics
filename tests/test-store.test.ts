@@ -683,6 +683,25 @@ test("review configuration supports a review cycle and closes on invalid or exce
     process.env[key] = old;
   }
 });
+test("expired review re-entry redirects agreement to a friendly closed gate", async () => {
+  const s = reviewSetup();
+  process.env.REVIEW_END_AT = new Date(Date.now() - 2000).toISOString();
+  await assert.rejects(
+    s.guarded.authenticate.admin(
+      request(s.shop.myshopifyDomain, "/app/agreement"),
+    ),
+    (error: unknown) =>
+      error instanceof Response &&
+      error.status === 302 &&
+      error.headers.get("Location") === "/app/review",
+  );
+  const review = await reviewPage({
+    request: request(s.shop.myshopifyDomain, "/app/review"),
+  } as any);
+  assert.equal(review.enabled, false);
+  assert.equal(review.admitted, false);
+  assert.equal(s.calls.orders, 0);
+});
 test("review codes accept human-safe formatting while preserving legacy credentials", () => {
   reviewSetup();
   const human = "ABCD-EFGH-JKLM-NPQR";
