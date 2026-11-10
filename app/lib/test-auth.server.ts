@@ -43,6 +43,16 @@ export function restrictShopify<
         const context = await sdk.authenticate.admin(request);
         const review = reviewConfig();
         const path = new URL(request.url).pathname;
+        // A reviewer grant expires after 48 hours even while the overall
+        // review window remains open. Do not treat that reviewer shop as a
+        // development store: return embedded UI routes to the review gate,
+        // while keeping APIs fail-closed before any business work runs.
+        if (review && !(await hasStoreAdmission(context.session.shop))) {
+          if (/^\/app\/review(?:\.data)?$/.test(path)) return context;
+          if (path.startsWith("/api/"))
+            await requireStoreAdmission(context.session.shop);
+          throw await context.redirect("/app/review");
+        }
         if (!review) {
           if (/^\/app\/review(?:\.data)?$/.test(path)) return context;
           if (/^\/app\/agreement(?:\.data)?$/.test(path)) {

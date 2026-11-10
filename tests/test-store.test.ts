@@ -591,6 +591,7 @@ import {
   encodeGrant,
   hashReviewCode,
   reviewKey,
+  REVIEW_EVENT,
 } from "../app/lib/review-policy.server";
 import {
   admitReviewShop,
@@ -700,6 +701,61 @@ test("expired review re-entry redirects agreement to a friendly closed gate", as
   } as any);
   assert.equal(review.enabled, false);
   assert.equal(review.admitted, false);
+  assert.equal(s.calls.orders, 0);
+});
+test("expired reviewer grant returns every embedded tab to the review gate, not 403", async () => {
+  const s = reviewSetup();
+  s.shop.plan.partnerDevelopment = false;
+  const c = reviewConfig()!;
+  const key = reviewKey(s.shop.myshopifyDomain);
+  s.rows.set(key, {
+    shopId: s.shop.myshopifyDomain,
+    event: REVIEW_EVENT,
+    dedupeKey: key,
+    data: encodeGrant(
+      {
+        shop: s.shop.myshopifyDomain,
+        actor: "synthetic-reviewer",
+        campaign: c.campaign,
+        issued: Date.now() - 49 * 3600000,
+        expires: Date.now() - 3600000,
+      },
+      c.key,
+    ),
+  });
+
+  for (const path of [
+    "/app",
+    "/app/agreement",
+    "/app/billing",
+    "/app/support",
+  ]) {
+    await assert.rejects(
+      s.guarded.authenticate.admin(request(s.shop.myshopifyDomain, path)),
+      (error: unknown) =>
+        error instanceof Response &&
+        error.status === 302 &&
+        error.headers.get("Location") === "/app/review",
+    );
+  }
+
+  const gateRequest = request(s.shop.myshopifyDomain, "/app/review");
+  const gate = await reviewPage({
+    request: gateRequest,
+    params: {},
+    context: undefined,
+    url: new URL(gateRequest.url),
+    pattern: "/app/review",
+  });
+  assert.equal(gate.enabled, true);
+  assert.equal(gate.admitted, false);
+
+  await rejected(
+    s.guarded.authenticate.admin(
+      request(s.shop.myshopifyDomain, "/api/analytics"),
+    ),
+  );
+  assert.equal(s.calls.graphql, 0);
   assert.equal(s.calls.orders, 0);
 });
 test("review codes accept human-safe formatting while preserving legacy credentials", () => {
